@@ -1,0 +1,14 @@
+#
+# Tutorial CloudFormation Template
+#
+# This template will provision a new Virtual Private Cloud and split it into a
+# public and private subnet. A web server will be provisioned in the public
+# subnet and a database server will be provisioned in the private subnet.
+#
+
+Description: Provisions a simple cluster with a web and database server
+
+Parameters:
+  KeyPairName:
+    Type: String
+    Description: The name of the keypair used when provisioning instances
