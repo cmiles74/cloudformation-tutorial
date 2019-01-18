@@ -82,6 +82,34 @@ Parameters:
     Description: Name of keypair used when provisioning instances
 ```
 
+Some decisions are best postponed until the absolute last minute and parameters
+are here when you have decisions to postpone. When we decide to provision our
+resources, we can provide the name of the EC2 key pair to use at that time.
+
+I'm not going to go into a big discussion about how to manage your EC2 key
+pairs. Maybe you have one per person who has access to provision instances.
+Maybe you have one per client. However you manage it, you can pass it in when
+you provision resources.
+
+## Provision Resource With Your Template
+
+With our template set, we're ready to use it to provision some resources! Go
+ahead and run the command below to being provisioning.
+
+```shell
+aws cloudformation create-stack \
+  --stack-name tutorial \
+  --template-body file://template.yaml \
+  --parameters ParameterKey=KeyPairName,ParameterValue=cloudfront-tutorial
+```
+
+You should promptly receive the error below:
+
+> An error occurred (ValidationError) when calling the CreateStack operation:
+> Template format error: At least one Resources member must be defined.
+
+Not a surprise, we didn't actually ask CloudFormation to provision anything for us.
+
 ------
 [0]: https://aws.amazon.com/cloudformation/
 [1]: https://aws.amazon.com/cli/
