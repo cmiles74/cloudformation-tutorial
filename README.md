@@ -38,14 +38,14 @@ Amazon provides an automation tool: [CloudFormation][0].
 
 ## Install the AWS Command Line Tools
 
-Amazon provides a goofy drag-and-drop interface for CloudFormation, but that
-runs kind of counter to the whole point of this article. You can also write your
+Amazon provides a goofy drag-and-drop interface for CloudFormation but that runs
+kind of counter to the whole point of this article. You can also write your
 CloudFormation template and then upload it via their web interface, I think
 that's also a little clunky. My recommendation is that you install the [AWS
-Command Line Tools][1]. Amazon also provides packages for Windows, but if you're
-working from within the Windows environment you might be more interested in the
-[AWS Tools for PowerShell][2] which do much the same thing but, you know, with
-[]PowerShell][3].
+Command Line Tools][1] and use those tools to deploy. Amazon also provides
+packages for Windows, but if you're working from within the Windows environment
+you might be more interested in the [AWS Tools for PowerShell][2] which do much
+the same thing but, you know, with [PowerShell][3].
 
 This is kind of a power tip, but if you're managing more than one Amazon account
 or dealing with more than one region, you can [configure profiles][4] to make
@@ -81,6 +81,10 @@ Parameters:
     Type: String
     Description: Name of keypair used when provisioning instances
 ```
+
+Throughout this article we'll continue to build up this template but if you need
+to jump ahead or need to refer to the entire thing, you can [browse through it
+in the GitHub project][14].
 
 Some decisions are best postponed until the absolute last minute and parameters
 are here when you have decisions to postpone. When we decide to provision our
@@ -266,4 +270,4 @@ instances you've customized heavily, etc.)
 [11]: https://aws.amazon.com/premiumsupport/knowledge-center/create-connection-vpc/
 [12]: https://console.aws.amazon.com/cloudformation
 [13]: https://console.aws.amazon.com/vpc
-
+[14]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/template.yaml
