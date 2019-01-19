@@ -5,10 +5,24 @@
 # public and private subnet. A web server will be provisioned in the public
 # subnet and a database server will be provisioned in the private subnet.
 #
-
 Description: Provisions a simple cluster with a web and database server
 
 Parameters:
   KeyPairName:
     Type: String
     Description: The name of the keypair used when provisioning instances
+
+Resources:
+
+  #
+  # Virtual Private Network to hold our resources
+  #
+  TutorialVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.6.0.0/25"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: "Name"
+          Value: "Tutorial VPC"
