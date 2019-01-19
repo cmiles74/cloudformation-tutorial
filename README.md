@@ -58,10 +58,10 @@ CloudFormation directly from your console window! `:-)`
 
 In the world of CloudFormation, the document you are writing is called a
 "template". I believe it's referred to as a template because one template can be
-used to create many different sets of resources. For instance, in this tutorial
+used to create many different sets of resources. For instance in this tutorial
 we're going to be writing a template that will provision a web server and a
 database server; we can use the template to provision as many of these
-web-and-database-server pairs as we might lock, all independent of one another.
+web-and-database-server pairs as we might like, all independent of one another.
 
 You can write your template in [YAML][5] or [JSON][6], if you're writing it by
 hand (as we are right now) then I _strongly_ recommend that you write it in
@@ -102,9 +102,10 @@ have deployed to AWS.
 
 ```yaml
 Resources:
-  TutorialVPC:
-    Type: AWS::EC2::VPC
-    Properties:
+
+  TutorialVPC:                   # name of the resource
+    Type: AWS::EC2::VPC          # type of resource
+    Properties:                  # properties of the resource
       CidrBlock: "10.6.0.0/25"
       EnableDnsSupport: true
       EnableDnsHostnames: true
@@ -117,14 +118,14 @@ The `Resources` section of the template will contain a stanza for each of the
 resources we provision, this will be the bulk of the template. Each stanza in
 this section will start with the name of the resource (`TutorialVPC`), we can
 use this name when we need to reference the resource while creating other
-resource (for instance, when we add subnets to this VPC). After the name we need
-to declare the `Type` of resource: every CloudFormation resource has a type,
-they are all clearly documented in the [CloudFormation API Documentation][7]. In
-the example above we are creating a new [VPC][9] instance. Next we set the
-`Properties` for our resource, the values provided here will be particular to
-each resource. Most resources accept a `Tags` property but not all, if you set
-`Tags` on a resource that doesn't support that property CloudFormation will
-throw an error.
+resources (for instance, when we add subnets to this VPC). After the name we
+need to declare the `Type` of resource: every CloudFormation resource has a
+type, they are all clearly documented in the [CloudFormation API
+Documentation][7]. In the example above we are creating a new [VPC][9] instance.
+Next we set the `Properties` for our resource, the values provided here will be
+particular to each resource. Most resources accept a `Tags` property but not
+all, if you set `Tags` on a resource that doesn't support that property
+CloudFormation will throw an error.
 
 Every VPC needs a block of IP addresses, we set this with the `CidrBlock`
 property and provide [a non-routable network with 254 available addresses][10].
@@ -138,12 +139,12 @@ We'd like Amazon to continue to assign names to our instances, so we set the
 some tags on our resources to remind ourselves why we provisioned them in the
 first place.
 
-## Provision Resource With Your Template
+## Provision Resources With Your Template
 
 With our template set, we're ready to use it to provision some resources! When
 we provide the template to CloudFormation, we also have to provide our parameter
-values and we have the opportunity to tag the provisioned resources (maybe be
-client or project or both).
+values and we have the opportunity to tag _all_ of the provisioned resources
+(maybe be client or project or both).
 
 Go ahead and run the command below to being provisioning. When CloudFormation
 sets up all of the resources it links them together into a "stack". Once
@@ -158,13 +159,16 @@ aws cloudformation create-stack \
   --tags Key=Project,Value=cf-tutorial
 ```
 
+Remember to provide your own key pair name where we have used
+`cloudfront-tutorial`.
+
 As soon as CloudFormation receives the template it will return a new `StackId`
-with the Amazon Resource Name (ARN) for the stack, you will have to wait a bit
-for the stack to finish being provisioned. You can check on your stack through
-the [CloudFormation web console][12], some resources take longer than others,
-CloudFormation will ensure they are created in the right order and work out the
-dependencies. This template should move along pretty quickly as we aren't
-provisioning much. 
+with the [Amazon Resource Name][15] (ARN) for the stack, you will have to wait a
+bit for the stack to finish being provisioned. You can check on your stack
+through the [CloudFormation web console][12] and see how things are going. Some
+resources take longer than others, CloudFormation will ensure they are created
+in the right order and work out the dependencies. This template should move
+along pretty quickly as we aren't provisioning much.
 
 I broke the command over several lines to try and make it easier to follow.
 We...
@@ -172,26 +176,25 @@ We...
 * Ask the AWS tools to call out to CloudFormation with the "create-stack"
   command
 * Set the name of the stack we are creating to "tutorial"
-* Provide our template to CloudFormation with the ``file:///` URL
+* Provide our template to CloudFormation with the `file://` URL
 * We set the one template parameter, `KeyPairName` (note the weird way we have
   to set parameters)
 * We provided a one tag key and value that CloudFormation will use to tag all of
   the provisioned resources
   
-If you have multiple parameters, you can separate them with a space. If you have
-multiple tags, you can separate them with a comma. It's weird, I don't know why
-they aren't uniform.
+Multiple parameters you can separate them with a space, multiple tags are
+separated with a comma. It's weird, I don't know why they aren't uniform.
 
 When provisioning is complete, you can head over to the [VPC web console][13] to
-inspect your new resource. There's not a lot to see, but if you choose "Your
-VPCs" from the left-hand navigation bar and then select your "Tutorial VPC" from
-the list, you can click the "Tags" tab and look at the tags associated with the
-resource. You'll see the tag we specified in the template (`Name`) and the tag
-we passed into the `create-stack` command ('Project'). CloudFormation also set
-several tags of it's own, linking the resource to the stack.
+inspect your new virtual cloud. There's not a lot to see, but if you choose
+"Your VPCs" from the left-hand navigation bar and then select your "Tutorial
+VPC" from the list, you can click the "Tags" tab and look at the tags associated
+with the resource. You'll see the tag we specified in the template (`Name`) and
+the tag we passed into the `create-stack` command (`Project``). CloudFormation
+also set several tags of it's own, linking the resource to the stack.
 
-As we work through the template, we might update the stack or delete it
-entirely. The command to update the stack is almost exactly the same.
+As we work through the template we might update the stack or delete it entirely.
+The command to update the stack is almost exactly the same.
 
 ```shell
 aws cloudformation update-stack \
@@ -209,8 +212,7 @@ during an update then it will be as if your update attempt never occurred.
 Deleting the stack is quite a bit shorter.
 
 ```shell
-aws cloudformation delete-stack \
-  --stack-name tutorial
+aws cloudformation delete-stack --stack-name tutorial
 ```
 
 Go ahead and run that command now to delete the stack. The AWS tool command
@@ -223,9 +225,9 @@ In my opinion, this is a really nice way to work. You can edit your template and
 work on getting all of the bits and pieces of your stack created and linked
 together in a way that makes sense (provisioned in the VPC, in the correct
 subnet, with the correct security group and policies, etc.) When you feel pretty
-good about your work so far you can go ahead and provision. If there's a problem
-or something isn't lining up the way it should you can simply delete the stack
-and continue to work on your template. For me, this is far more convenient then
+good about your work you can go ahead and provision. If there's a problem or
+something isn't lining up the way it should you can simply delete the stack and
+continue to work on your template. For me, this is far more convenient then
 clicking through the various web consoles and trying to link everything up by
 filling out fields or applying actions to all of the various pieces.
 
@@ -243,7 +245,7 @@ open for those warnings.
 You can also set a `DeletionPolicy` for the resources in your template. This
 lets you signal to CloudFormation that, for certain resources, you would like to
 keep the resource (even if a replacement is required for provisioning) or (if
-the resource support it) perform a "snapshot" backup before deleting the
+the resource supports it) perform a "snapshot" backup before deleting the
 resource (i.e., EC2 volumes or RDS instances). That said, even with the deletion
 policy set for your critical resources, you should think hard about updating
 them after provisioning the stack.
@@ -253,7 +255,7 @@ while you are working on it. Wait until you feel pretty good about the
 template, maybe until the point where you're ready to deploy your application or
 project. When you reach that point, go back and set the deletion policy to
 `Retain` on those things that are truly critical (volumes with data on them,
-instances you've customized heavily, etc.)
+instances you've customized heavily, etc.) and then update your stack.
 
 ------
 [0]: https://aws.amazon.com/cloudformation/
@@ -271,3 +273,4 @@ instances you've customized heavily, etc.)
 [12]: https://console.aws.amazon.com/cloudformation
 [13]: https://console.aws.amazon.com/vpc
 [14]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/template.yaml
+[15]: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
