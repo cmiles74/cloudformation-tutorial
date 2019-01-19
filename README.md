@@ -197,17 +197,33 @@ aws cloudformation update-stack \
   --tags Key=Project,Value=cf-tutorial
 ```
 
-Deleting the stack is quite a bit shorter.
-
-```shell
-aws cloudformation delete-stack \
-  --stack-name tutorial \
-```
-
 If CloudFormation runs into any problems while creating or updating your stack,
 it will roll back to the last valid state of the stack. If this happens during
 the creation of the stack you'll end up with no resources at all, if it happens
 during an update then it will be as if your update attempt never occurred.
+
+Deleting the stack is quite a bit shorter.
+
+```shell
+aws cloudformation delete-stack \
+  --stack-name tutorial
+```
+
+Go ahead and run that command now to delete the stack. The AWS tool command
+won't return any results but if you switch to the CloudFormation console you
+might catch a glimpse of the stack before it's entirely deleted. If you switch
+over to the VPC console you'll see the new VPC is gone, it was deleted along
+with the stack. 
+
+In my opinion, this is a really nice way to work. You can edit your template and
+work on getting all of the bits and pieces of your stack created and linked
+together in a way that makes sense (provisioned in the VPC, in the correct
+subnet, with the correct security group and policies, etc.) When you feel pretty
+good about your work so far you can go ahead and provision. If there's a problem
+or something isn't lining up the way it should you can simply delete the stack
+and continue to work on your template. For me, this is far more convenient then
+clicking through the various web consoles and trying to link everything up by
+filling out fields or applying actions to all of the various pieces.
 
 ### Retaining Resources through Stack Updates and Even Deletion
 
