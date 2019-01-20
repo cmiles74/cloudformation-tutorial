@@ -128,3 +128,74 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
       RouteTableId: !Ref PrivateRouteTable        
+
+  #
+  # Security Groups
+  #
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: "Web Server Security Group"
+    Properties:
+      VpcId: !Ref TutorialVPC
+      GroupDescription: Web Server Security Group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 80              # HTTP 
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 443             # HTTPS
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0         # Replace with your IP Range
+          IpProtocol: tcp
+          FromPort: 3389            # MS Remote Desktop
+          ToPort: 3389
+        - CidrIp: 0.0.0.0/0         # Replace with your IP Range
+          IpProtocol: tcp
+          FromPort: 22              # SSH
+          ToPort: 22
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 80              # HTTP
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 443             # HTTPS
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 587             # SSL SMTP
+          ToPort: 587
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+      Tags:
+        - Key: "Name"
+          Value: "Public Subnet"
+
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: "Private Security Group"
+    Properties:
+      VpcId: !Ref TutorialVPC
+      GroupDescription: Private Subnet Security Group
+      SecurityGroupIngress:
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+      SecurityGroupEgress:
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: '80'            # HTTP
+          ToPort: '80'
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: '443'           # HTTPS
+          ToPort: '443'
+      Tags:
+        - Key: "Name"
+          Value: "Private Subnet"

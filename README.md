@@ -504,6 +504,120 @@ tab to see all of the items that you have provisioned. This establishes your VPC
 and lays all of the groundwork you need, the next step is to get your instances
 provisioned.
 
+## Setup Our Security Groups
+
+Before we can provision our instances we need to get our [security groups][31]
+set. We will have one for each subnet and these groups will specify what traffic
+we will allow in and out of each of our subnets. We will allow web traffic in
+and out of our public subnets, in our private subnet we're only going to allow
+web traffic out and nothing inbound.
+
+```yaml
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: "Web Server Security Group"
+    Properties:
+      VpcId: !Ref TutorialVPC
+      GroupDescription: Web Server Security Group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 80              # HTTP 
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 443             # HTTPS
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0         # Replace with your IP Range
+          IpProtocol: tcp
+          FromPort: 3389            # MS Remote Desktop
+          ToPort: 3389
+        - CidrIp: 0.0.0.0/0         # Replace with your IP Range
+          IpProtocol: tcp
+          FromPort: 22              # SSH
+          ToPort: 22
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+```
+
+We use the [SecurityGroup resource][32] to create our new group for the public
+subnet. The `Description` we provide is visible in the web console and then we
+move on to the properties. We use the `VpcId` property to indicate that this
+group is for our VPC and then provide another, very similar description, for the
+`GroupDescription` (this property is required).
+
+With that out of the way, we move on to the in-bound (ingress) rules. Each rule
+is provided by a [Security Group Rule property][33] that is made up of an IP
+address range, the protocol and then a range of ports. We have created rules for
+HTTP, HTTPS, Remote Desktop, SSH and traffic inside of our VPC.
+
+In the example above we have opened up the remote desktop port and the SSH port
+to the entire internet: this is not a great idea. Since these ports are used
+almost exclusively for management of the instances, a better choice would be to
+open these ports up to the address range that is used by your office. If you
+don't have a fixed range of addresses you can use then I encourage you to look
+into other solutions, perhaps using a VPN.
+
+```yaml
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 80              # HTTP
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 443             # HTTPS
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: 587             # SSL SMTP
+          ToPort: 587
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+      Tags:
+        - Key: "Name"
+          Value: "Public Subnet"
+```
+
+Here we setup the rules for outbound traffic: HTTP, HTTPS, and SMTP over SSL. We
+also have a rule that allows all traffic inside our VPC. If you are more
+security conscious, you can nail down specific types of traffic inside your VPC
+(i.e., just web, SSH and database traffic).
+
+The security group for our private subnet is much simpler.
+
+```yaml
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: "Private Security Group"
+    Properties:
+      VpcId: !Ref TutorialVPC
+      GroupDescription: Private Subnet Security Group
+      SecurityGroupIngress:
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+      SecurityGroupEgress:
+        - CidrIp: 10.3.0.0/24       # Inside the VPC
+          IpProtocol: -1            # All traffic
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: '80'            # HTTP
+          ToPort: '80'
+        - CidrIp: 0.0.0.0/0         # Public Internet
+          IpProtocol: tcp
+          FromPort: '443'           # HTTPS
+          ToPort: '443'
+      Tags:
+        - Key: "Name"
+          Value: "Private Subnet"
+```
+
+We are only allowing incoming traffic from inside our VPC into the private
+subnet. Outbound, we allow all traffic destined for other addresses in our VPC
+and we're allowing only HTTP and HTTPS to the public internet. Traffic from
+addresses in our private subnet is already being routed through our NAT gateway,
+we're likely only going to use the internet to download software updates.
+
 ------
 [0]: https://aws.amazon.com/cloudformation/
 [1]: https://aws.amazon.com/cli/
@@ -536,3 +650,6 @@ provisioned.
 [28]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-natgateway.html
 [29]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-sub.html
 [30]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-ref.html
+[31]: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html
+[32]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
+[33]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group-rule.html
