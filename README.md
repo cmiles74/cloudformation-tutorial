@@ -461,9 +461,37 @@ it can communicate with the internet.
 
 While it would make a lot of sense to provide the Elastic IP we provisioned
 directly to the gateway, we instead need to provide the `AllocationId`
-associated with that Elastic IP instead. Here we use the [`!sSub`][29] function
+associated with that Elastic IP instead. Here we use the [`!Sub`][29] function
 to get the `AllocationId` of our `NatGatewayElasticIP` and provide that value to
 the `AllocationId` property.
+
+Now we can setup our route for the private subnet to get to the internet via our
+NAT gateway.
+
+```yaml
+  PrivateSubnetNatRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NatGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable
+```
+
+We create our route, using the `DependsOn` attribute to indicate that we need
+the `NatGateway` provisioned before this route is created. Then we use the
+`NatGateway` property to link in our gateway and the `RouteTableId` to tie the
+route to our routing table.
+
+```yaml
+  PrivateSubnetNatRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet
+```
+
+The final step is to associate our routing table with our private subnet. Whew!
 
 ------
 [0]: https://aws.amazon.com/cloudformation/

@@ -121,4 +121,10 @@ Resources:
         - Key: "Name"
           Value: "NAT Gateway"
 
-  
+  PrivateSubnetNatRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NatGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable        
