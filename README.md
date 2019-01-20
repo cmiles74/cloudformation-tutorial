@@ -95,6 +95,8 @@ pairs. Maybe you have one per person who has access to provision instances.
 Maybe you have one per client. However you manage it, you can pass it in when
 you provision resources.
 
+## Create a New Virtual Private Cloud
+
 We need at least one resource in order to provision our template. For this
 project we're going to create our own [Virtual Private Cloud][8] (VPC) to hold our
 resources. This will keep things isolated from everything else you have might
@@ -106,7 +108,7 @@ Resources:
   TutorialVPC:                   # name of the resource
     Type: AWS::EC2::VPC          # type of resource
     Properties:                  # properties of the resource
-      CidrBlock: "10.6.0.0/25"
+      CidrBlock: "10.6.0.0/24"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
@@ -257,6 +259,212 @@ project. When you reach that point, go back and set the deletion policy to
 `Retain` on those things that are truly critical (volumes with data on them,
 instances you've customized heavily, etc.) and then update your stack.
 
+Now that we have the basic ideas and the machinery down, we can move a little
+more quickly.
+
+## Setup an Internet Gateway
+
+We're going to divide our virtual private cloud into two subnets: one will be
+able to communicate with the public internet and will house our web server. The
+other subnet will be able to talk to the first but will not face the internet.
+
+In order to get our external subnet facing the internet, we need to provision an
+[Internet Gateway][16] and then setup routes so that instance in our virtual
+cloud can send and receive traffic over the public internet.
+
+```yaml
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: "Internet Gateway"
+```
+
+There isn't a lot to configure for the [InternetGateway resource][17]. We give
+it a name and add a tag. Next we need to attach it to our virtual cloud.
+
+```yaml
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TutorialVPC
+      InternetGatewayId: !Ref InternetGateway
+```
+
+There's not a lot to configuring the [VPCGatewayAttachment][18] either. The
+interesting bit is where we tell it which VPC to which we'd like it attached. We
+use the `!Ref` notation to indicate that we are providing a _reference_ to
+another resource in the template and then we provide the name of that resource.
+
+## Setup Your Subnets
+
+With that internet stuff out of the way, we can create our two subnets. First,
+our private subnet.
+
+```yaml
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TutorialVPC
+      CidrBlock: "10.6.0.0/25"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: "Name"
+          Value: "Public Subnet"
+```
+
+We use the [Subnet resource][19] to split off [a chunk of ouor VPC][20] with
+half of our address space, we use the `VpcId` property to link this subnet
+declaration to your VPC. We set the `MapPublicIpOnLaunch` property to `true` so
+that each instance gets a public IP when launched.
+
+```yaml
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TutorialVPC
+      CidrBlock: "10.6.0.128/25"
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "Private Subnet"
+```
+
+In the stanza above, we [take the rest of our address space][21] and allocate
+that to our private subnet, again we use the `VpcId` property to link this
+subnet declaration to your VPC. We don't want instance in this network to have
+public IP addresses and we indicate that by setting the `MapPublicIpOnLaunch`
+property to `false`.
+
+## Setup Your Routing
+
+We always have a default route that lets the addresses in our VPC communicate
+with each other but we don't start out with any routes out to our internet
+gateway and the public internet. Before we setup our routes we need to setup our
+routing tables.
+
+```yaml
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "Public Internet Route Table"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "Private Route Table"
+```
+
+There's not much to the [RouteTable resource][22], we indicate that we're going
+to be managing routes for our VPC with the `VpcId` property and set a tag.
+
+Next we're going setup the actual routes.
+
+```yaml
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+```
+
+The [Route resource][23] adds a new route to a routing table. Here we add a
+route to our public table to route traffic for addresses on the public internet
+through our internet gateway. We let CloudFormation know that this resource
+shouldn't be created unless the `VPCGatewayAttachment` is already setup with the
+[`DependsOn` attribute][24]. Like the `Retain` attribute, you can place this on
+any resource.
+
+```yaml
+  PublicSubnetPublicRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+```
+
+With our route to the public internet setup, we can use the
+[SubnetRouteTableAssociation resource][25] to link our routing table to our
+public subnet.
+
+Next we need to do something similar for our private subnet. The big difference
+here is that our private subnet doesn't connect directly to the internet.
+Instead we will use [Network Address Translation (NAT) gateway][26] to let
+instance on our private subnet connect to the internet without letting the
+public internet to initiate connections with instances in our private subnet.
+
+```yaml
+  NatGatewaySubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "NAT Gateway Subnet Route Table"
+```
+
+We create a new routing table and associate it to our VPC.
+
+```yaml
+  NatGatewayInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref NatGatewaySubnetRouteTable
+```
+
+And then we create a route to the public internet through our internet gateway.
+
+The next step is to create our NAT gateway, but first we need to get a publicly
+accessible IP address that will be assigned to our NAT gateway. We can use the
+[EIP (Elastic IP) Resource][27] to get a handle on a new Elastic IP address.
+
+```yaml
+  NatGatewayElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+```
+
+We set the `domain` value to `vpc`, indicating that we want to use this address
+from our VPC. Kind of funny, that's the only valid value for that property.
+
+Now we can setup our NAT gateway...
+
+```yaml
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      AllocationId: !Sub ${NatGatewayElasticIP.AllocationId}
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: "Name"
+          Value: "NAT Gateway"
+```
+
+We use the [NatGateway resource][28] to create our new NAT gateway and indicate
+that we need our VPCGatewayAttachment resource provisioned before this is
+created. We set the `SubnetId` property to put it in our public subnet so that
+it can communicate with the internet. 
+
+While it would make a lot of sense to provide the Elastic IP we provisioned
+directly to the gateway, we instead need to provide the `AllocationId`
+associated with that Elastic IP instead. Here we use the [`!sSub`][29] function
+to get the `AllocationId` of our `NatGatewayElasticIP` and provide that value to
+the `AllocationId` property.
+
 ------
 [0]: https://aws.amazon.com/cloudformation/
 [1]: https://aws.amazon.com/cli/
@@ -274,3 +482,17 @@ instances you've customized heavily, etc.) and then update your stack.
 [13]: https://console.aws.amazon.com/vpc
 [14]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/template.yaml
 [15]: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
+[16]: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html
+[17]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-internetgateway.html
+[18]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpc-gateway-attachment.html
+[19]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet.html
+[20]: http://jodies.de/ipcalc?host=10.6.0.0&mask1=25&mask2=
+[21]: http://jodies.de/ipcalc?host=10.6.0.128&mask1=25&mask2=
+[22]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-route-table.html
+[23]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-route.html
+[24]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html
+[25]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet-route-table-assoc.html
+[26]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html
+[27]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-eip.html
+[28]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-natgateway.html
+[29]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-sub.html

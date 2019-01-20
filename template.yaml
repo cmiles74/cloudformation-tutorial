@@ -20,9 +20,105 @@ Resources:
   TutorialVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.6.0.0/25"
+      CidrBlock: "10.6.0.0/24"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: "Name"
           Value: "Tutorial VPC"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: "Internet Gateway"        
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TutorialVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  #
+  # Subnets
+  #
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TutorialVPC
+      CidrBlock: "10.6.0.0/25"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: "Name"
+          Value: "Public Subnet"
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TutorialVPC
+      CidrBlock: "10.6.0.128/25"
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "Private Subnet"
+
+  #
+  # Routing
+  #
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "Public Internet Route Table"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "Private Route Table"
+
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewaySubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TutorialVPC
+      Tags:
+        - Key: "Name"
+          Value: "NAT Gateway Subnet Route Table"
+
+  NatGatewayInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref NatGatewaySubnetRouteTable
+
+  NatGatewayElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      AllocationId: !Sub ${NatGatewayElasticIP.AllocationId}
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: "Name"
+          Value: "NAT Gateway"
+
+  
