@@ -54,7 +54,7 @@ that process easier.
 With one of these tools installed and properly configured, you can invoke
 CloudFormation directly from your console window! `:-)`
 
-## Start Your New CloudFormation Template
+## Start Our New CloudFormation Template
 
 In the world of CloudFormation, the document you are writing is called a
 "template". I believe it's referred to as a template because one template can be
@@ -141,7 +141,7 @@ We'd like Amazon to continue to assign names to our instances, so we set the
 some tags on our resources to remind ourselves why we provisioned them in the
 first place.
 
-## Provision Resources With Your Template
+## Provision Resources With Our Template
 
 With our template set, we're ready to use it to provision some resources! When
 we provide the template to CloudFormation, we also have to provide our parameter
@@ -189,7 +189,7 @@ separated with a comma. It's weird, I don't know why they aren't uniform.
 
 When provisioning is complete, you can head over to the [VPC web console][13] to
 inspect your new virtual cloud. There's not a lot to see, but if you choose
-"Your VPCs" from the left-hand navigation bar and then select your "Tutorial
+"Yourq VPCs" from the left-hand navigation bar and then select your "Tutorial
 VPC" from the list, you can click the "Tags" tab and look at the tags associated
 with the resource. You'll see the tag we specified in the template (`Name`) and
 the tag we passed into the `create-stack` command (`Project``). CloudFormation
@@ -264,12 +264,15 @@ more quickly.
 
 ## Setup an Internet Gateway
 
-We're going to divide our virtual private cloud into two subnets: one will be
-able to communicate with the public internet and will house our web server. The
-other subnet will be able to talk to the first but will not face the internet.
+For this project We're going to divide our virtual private cloud into two
+subnets: one will be able to communicate with the public internet and will house
+our web server. The other subnet will be able to talk to the first but will not
+face the internet, it will house our database server. In this way we can ensure
+that machines on the public internet cannot communicate directly with our
+database server.
 
 In order to get our external subnet facing the internet, we need to provision an
-[Internet Gateway][16] and then setup routes so that instance in our virtual
+[Internet Gateway][16] and then setup routes so that instances in our virtual
 cloud can send and receive traffic over the public internet.
 
 ```yaml
@@ -294,13 +297,13 @@ it a name and add a tag. Next we need to attach it to our virtual cloud.
 
 There's not a lot to configuring the [VPCGatewayAttachment][18] either. The
 interesting bit is where we tell it which VPC to which we'd like it attached. We
-use the `!Ref` notation to indicate that we are providing a _reference_ to
+use the [`!Ref` function][30] to indicate that we are providing a _reference_ to
 another resource in the template and then we provide the name of that resource.
 
-## Setup Your Subnets
+## Setup Our Subnets
 
 With that internet stuff out of the way, we can create our two subnets. First,
-our private subnet.
+our public subnet.
 
 ```yaml
   PublicSubnet:
@@ -314,9 +317,9 @@ our private subnet.
           Value: "Public Subnet"
 ```
 
-We use the [Subnet resource][19] to split off [a chunk of ouor VPC][20] with
-half of our address space, we use the `VpcId` property to link this subnet
-declaration to your VPC. We set the `MapPublicIpOnLaunch` property to `true` so
+We use the [Subnet resource][19] to split off [a chunk of our VPC][20] with half
+of our address space, we use the `VpcId` property to link this subnet
+declaration to our VPC. We set the `MapPublicIpOnLaunch` property to `true` so
 that each instance gets a public IP when launched.
 
 ```yaml
@@ -333,16 +336,16 @@ that each instance gets a public IP when launched.
 
 In the stanza above, we [take the rest of our address space][21] and allocate
 that to our private subnet, again we use the `VpcId` property to link this
-subnet declaration to your VPC. We don't want instance in this network to have
+subnet declaration to our VPC. We don't want instances in this network to have
 public IP addresses and we indicate that by setting the `MapPublicIpOnLaunch`
 property to `false`.
 
-## Setup Your Routing
+## Setup Our Routing
 
 We always have a default route that lets the addresses in our VPC communicate
 with each other but we don't start out with any routes out to our internet
-gateway and the public internet. Before we setup our routes we need to setup our
-routing tables.
+gateway and the public internet. In order to setup our routes we first need to
+setup our routing tables.
 
 ```yaml
   PublicRouteTable:
@@ -398,9 +401,10 @@ public subnet.
 
 Next we need to do something similar for our private subnet. The big difference
 here is that our private subnet doesn't connect directly to the internet.
-Instead we will use [Network Address Translation (NAT) gateway][26] to let
-instance on our private subnet connect to the internet without letting the
-public internet to initiate connections with instances in our private subnet.
+Instead we will use a [Network Address Translation (NAT) gateway][26] to let
+instances on our private subnet connect to the internet without allowing
+machines on the public internet to initiate connections with instances in our
+private subnet.
 
 ```yaml
   NatGatewaySubnetRouteTable:
@@ -531,3 +535,4 @@ provisioned.
 [27]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-eip.html
 [28]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-natgateway.html
 [29]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-sub.html
+[30]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-ref.html
