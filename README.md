@@ -493,6 +493,13 @@ route to our routing table.
 
 The final step is to associate our routing table with our private subnet. Whew!
 
+It was a long walk but we have accomplished a lot. Go ahead and provision your
+template and wait for CloudFormation to finish getting everything setup. From
+the CloudFormation web console, select your stack and click on the "Resources"
+tab to see all of the items that you have provisioned. This establishes your VPC
+and lays all of the groundwork you need, the next step is to get your instances
+provisioned.
+
 ------
 [0]: https://aws.amazon.com/cloudformation/
 [1]: https://aws.amazon.com/cli/
