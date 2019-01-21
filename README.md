@@ -95,7 +95,7 @@ pairs. Maybe you have one per person who has access to provision instances.
 Maybe you have one per client. However you manage it, you can pass it in when
 you provision resources.
 
-## Create a New Virtual Private Cloud
+## Provision a New Virtual Private Cloud
 
 We need at least one resource in order to provision our template. For this
 project we're going to create our own [Virtual Private Cloud][8] (VPC) to hold our
@@ -262,7 +262,7 @@ instances you've customized heavily, etc.) and then update your stack.
 Now that we have the basic ideas and the machinery down, we can move a little
 more quickly.
 
-## Setup an Internet Gateway
+## Provision an Internet Gateway
 
 For this project We're going to divide our virtual private cloud into two
 subnets: one will be able to communicate with the public internet and will house
@@ -276,7 +276,7 @@ In order to get our external subnet facing the internet, we need to provision an
 cloud can send and receive traffic over the public internet.
 
 ```yaml
-  InternetGateway:
+  TutorialInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -288,11 +288,11 @@ There isn't a lot to configure for the [InternetGateway resource][17]. We give
 it a name and add a tag. Next we need to attach it to our virtual cloud.
 
 ```yaml
-  VPCGatewayAttachment:
+  TutorialVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref TutorialVPC
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref TutorialInternetGateway
 ```
 
 There's not a lot to configuring the [VPCGatewayAttachment][18] either. The
@@ -306,7 +306,7 @@ With that internet stuff out of the way, we can create our two subnets. First,
 our public subnet.
 
 ```yaml
-  PublicSubnet:
+  TutorialPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref TutorialVPC
@@ -323,7 +323,7 @@ declaration to our VPC. We set the `MapPublicIpOnLaunch` property to `true` so
 that each instance gets a public IP when launched.
 
 ```yaml
-  PrivateSubnet:
+  TutorialPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref TutorialVPC
@@ -348,7 +348,7 @@ gateway and the public internet. In order to setup our routes we first need to
 setup our routing tables.
 
 ```yaml
-  PublicRouteTable:
+  TutorialPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TutorialVPC
@@ -356,7 +356,7 @@ setup our routing tables.
         - Key: "Name"
           Value: "Public Internet Route Table"
 
-  PrivateRouteTable:
+  TutorialPrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TutorialVPC
@@ -371,13 +371,13 @@ to be managing routes for our VPC with the `VpcId` property and set a tag.
 Next we're going setup the actual routes.
 
 ```yaml
-  InternetRoute:
+  TutorialInternetRoute:
     Type: AWS::EC2::Route
     DependsOn: VPCGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-      RouteTableId: !Ref PublicRouteTable
+      GatewayId: !Ref TutorialInternetGateway
+      RouteTableId: !Ref TutorialPublicRouteTable
 ```
 
 The [Route resource][23] adds a new route to a routing table. Here we add a
@@ -388,11 +388,11 @@ shouldn't be created unless the `VPCGatewayAttachment` is already setup with the
 any resource.
 
 ```yaml
-  PublicSubnetPublicRoute:
+  TutorialPublicSubnetPublicRoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref TutorialPublicRouteTable
+      SubnetId: !Ref TutorialPublicSubnet
 ```
 
 With our route to the public internet setup, we can use the
@@ -407,7 +407,7 @@ machines on the public internet to initiate connections with instances in our
 private subnet.
 
 ```yaml
-  NatGatewaySubnetRouteTable:
+  TutorialNatGatewaySubnetRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TutorialVPC
@@ -419,13 +419,13 @@ private subnet.
 We create a new routing table and associate it to our VPC.
 
 ```yaml
-  NatGatewayInternetRoute:
+  TutorialNatGatewayInternetRoute:
     Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
+    DependsOn: TutorialVPCGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-      RouteTableId: !Ref NatGatewaySubnetRouteTable
+      GatewayId: !Ref TutorialInternetGateway
+      RouteTableId: !Ref TutorialNatGatewaySubnetRouteTable
 ```
 
 And then we create a route to the public internet through our internet gateway.
@@ -435,7 +435,7 @@ accessible IP address that will be assigned to our NAT gateway. We can use the
 [EIP (Elastic IP) Resource][27] to get a handle on a new Elastic IP address.
 
 ```yaml
-  NatGatewayElasticIP:
+  TutorialNatGatewayElasticIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
@@ -447,12 +447,12 @@ from our VPC. Kind of funny, that's the only valid value for that property.
 Now we can setup our NAT gateway...
 
 ```yaml
-  NatGateway:
+  TutorialNatGateway:
     Type: AWS::EC2::NatGateway
     DependsOn: VPCGatewayAttachment
     Properties:
-      AllocationId: !Sub ${NatGatewayElasticIP.AllocationId}
-      SubnetId: !Ref PublicSubnet
+      AllocationId: !Sub ${TutorialNatGatewayElasticIP.AllocationId}
+      SubnetId: !Ref TutorialPublicSubnet
       Tags:
         - Key: "Name"
           Value: "NAT Gateway"
@@ -473,13 +473,13 @@ Now we can setup our route for the private subnet to get to the internet via our
 NAT gateway.
 
 ```yaml
-  PrivateSubnetNatRoute:
+  TutorialPrivateSubnetNatRoute:
     Type: AWS::EC2::Route
     DependsOn: NatGateway
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-      RouteTableId: !Ref PrivateRouteTable
+      NatGatewayId: !Ref TutorialNatGateway
+      RouteTableId: !Ref TutorialPrivateRouteTable
 ```
 
 We create our route, using the `DependsOn` attribute to indicate that we need
@@ -488,11 +488,11 @@ the `NatGateway` provisioned before this route is created. Then we use the
 route to our routing table.
 
 ```yaml
-  PrivateSubnetNatRouteTableAssociation:
+  TutorialPrivateSubnetNatRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref TutorialPrivateRouteTable
+      SubnetId: !Ref TutorialPrivateSubnet
 ```
 
 The final step is to associate our routing table with our private subnet. Whew!
@@ -513,7 +513,7 @@ and out of our public subnets, in our private subnet we're only going to allow
 web traffic out and nothing inbound.
 
 ```yaml
-  PublicSecurityGroup:
+  TutorialPublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Description: "Web Server Security Group"
     Properties:
@@ -587,7 +587,7 @@ security conscious, you can nail down specific types of traffic inside your VPC
 The security group for our private subnet is much simpler.
 
 ```yaml
-  PrivateSecurityGroup:
+  TutorialPrivateSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Description: "Private Security Group"
     Properties:
@@ -617,6 +617,197 @@ subnet. Outbound, we allow all traffic destined for other addresses in our VPC
 and we're allowing only HTTP and HTTPS to the public internet. Traffic from
 addresses in our private subnet is already being routed through our NAT gateway,
 we're likely only going to use the internet to download software updates.
+
+## Provision Other Resources
+
+There are a lot of other resource that we might provision, aside from instances.
+You might need queues, notification topics, etc. For this project we're going to
+setup an S3 bucket to hold dump files from our database server.
+
+The nice thing about setting these up before the instances is that we can tell
+the instances about these resources and set policies so that our instances can
+access these resources without providing them with a specific set of credentials.
+
+```yaml
+  TutorialBackupS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      Tags:
+        - Key: "Name"
+          Value: "Backup Bucket"
+```
+
+Simple enough! We use the [Bucket resource][34] to create our bucket and we set
+that bucket to be private with the `AccessControl` property.
+
+## Setup an "Admininstrators" Group
+
+For this project we're creating a general "administrators" group that has access
+to the backup bucket with our database backups. I generally don't allow anyone
+direct access to the EC2 console unless they really need it, so I don't address
+that in this template (in addition, not every EC2 web console action can be managed
+this way). My thinking here is that we typically give "administrators" or
+"developers" accounts on the individual instances, they don't really need the
+EC2 web console in order to get their work done.
+
+```yaml
+  TutorialAdminGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      Policies:
+        - PolicyName: TutorialAdminPolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+                - s3:ListBucketByTags
+                - s3:ListBucketMultipartUploads
+                - s3:ListBucketVersions
+              Resource: !Sub TutorialBackupS3Bucket.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:GetObject
+              Resource: !Sub ${TutorialBackupS3Bucket.Arn}/*
+```
+
+We use the [IAM Group resource][35] to create our new group. The only property
+that we provide is the `Policies` property that contains a list of `PolicyName`
+and PolicyDocument` pairs, in this case we define only one that we have named
+"TutorialAdminPolicy".
+
+A `PolicyDocument`contains a `Statement` that holds a list of `Effect`
+instances; each of those in turn contains an `Action` property with a list of
+permissions. We use the `Resource` property to tie in a references to our
+bucket, in this case the backup bucket's ARN. If we take a look at the first
+`Effect`, you'll see that we've assigned four "ListBucket..." permissions for
+our backup bucket.
+
+Any account that we add to this group will be able to inspect and download the
+files in the bucket. By files, we mean database dumps for this project.
+
+One last note: since we are creating an IAM role with our template, we need to
+let CloudFormation know that this is okay. From here on out we need to add the
+`--capabilities` flag to our `aws` commands.
+
+```shell
+aws cloudformation create-stack \
+  --stack-name tutorial \
+  --template-body file://template.yaml \
+  --parameters ParameterKey=KeyPairName,ParameterValue=cloudfront-tutorial \
+  --tags Key=Project,Value=cf-tutorial \
+  --capabilities CAPABILITY_IAM
+```
+
+If you don't include the tag, CloudFormation will exit with an error. The same
+flag can be used with "update" commands.
+
+## Provision Our Instances
+
+I know what you are thinking: all that work and we're only now provisioning our
+instances! It's true, there was a lot of preparation and things to think about
+but we are well on our way to having a template that will provision our servers
+in a repeatable and reasonably safe manner. Just think of all the templates you
+will be writing!
+
+Oh, wait, I forgot about the roles and policies for the instances. Sorry!
+
+### Setup a Role for Our Instances
+
+First we need to setup the role that our instances can assume to get access to
+resources (for now, just the backup bucket).
+
+```yaml
+  TutorialInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws-us-gov:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws-us-gov:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws-us-gov:iam::aws:policy/AmazonSSMReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+```
+
+We use the [Role resource][36] to create our new instance role and we assign
+three canned policies...
+
+* the first lets the instance run the CloudWatch agent and submit events to the
+  [CloudWatch service][37]
+* the next lets the instance interact with [Systems Manager][38], letting us manage the
+  instances as a group
+* The last provides read-only access to the Systems Manager parameter store.
+
+Amazon's CloudWatch service will aggregate data submitted by your instances and
+let you setup reports, dashboards and alerts based on this data (i.e. when CPU
+usage gets too high or available disk space is too low). Systems Manager
+provides some tools for managing for instances, like installing patches or a
+software package. It lets you perform these actions on several instances as a
+group, which can be handy. I'm not going to go over these services in-depth here
+but I encourage you to spend some time checking them out if you haven't done so
+already.
+
+```yaml
+  TutorialInstanceRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: TutorialInstanceRolePolicy
+      Roles:
+        - Ref: TutorialInstanceRole
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:ListBucketByTags
+              - s3:ListBucketMultipartUploads
+              - s3:ListBucketVersions
+            Resource: !Sub TutorialBackupS3Bucket.Arn
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:GetObject
+            Resource: !Sub ${TutorialBackupS3Bucket.Arn}/*
+```
+
+We are creating a new [Policy resource][39] that we will assign to our
+instances. We link the role we just creates and then add a new policy that
+provides access to the backup bucket. As you can see, it is exactly the same as
+the role that we created for our administrators group.
+
+The last piece of this puzzle is an "instance profile" that we can assign to our
+instances.
+
+```yaml
+  TutorialInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref TutorialInstanceRole
+```
+
+With all of the other work done, there's not much to see here. We create a new
+[InstanceProfile resource][40] and link it to our role. When we provision
+instances we can assign them this profile, they will then have the ability to
+write to our backup bucket, submit performance and event data to CloudWatch and
+accept remote commands from System Manager.
+
+### Provision the Database Server
+
+We're going to provision the database server first so that we can tell the web
+server a little bit about it.
+
+```yaml
+
+```
 
 ------
 [0]: https://aws.amazon.com/cloudformation/
@@ -653,3 +844,10 @@ we're likely only going to use the internet to download software updates.
 [31]: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html
 [32]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
 [33]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group-rule.html
+[34]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+[35]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-group.html
+[36]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+[37]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html
+[38]: https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html
+[39]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-policy.html
+[40]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-instanceprofile.html
