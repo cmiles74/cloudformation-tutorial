@@ -11,4 +11,4 @@ private cloud broken into two subnets and including two instances.
 ----
 [1]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/1-networking-and-supporting-resources.md
 [2]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/2-IAM-groups-and-instances.md
-[3]]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/3-backups-and-monitoring.md
+[3]: https://github.com/cmiles74/cloudformation-tutorial/blob/master/3-backups-and-monitoring.md
