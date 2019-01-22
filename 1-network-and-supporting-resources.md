@@ -641,6 +641,14 @@ access these resources without providing them with a specific set of credentials
 Simple enough! We use the [Bucket resource][34] to create our bucket and we set
 that bucket to be private with the `AccessControl` property.
 
+## Until Next Time
+
+That is all we are going to cover in this article, we went over a lot of
+material. In the next piece in the series we'll setup some groups and roles and
+actually provision some instances.
+
+Thank you for reading!
+
 ----
 [0]: https://aws.amazon.com/cloudformation/
 [1]: https://aws.amazon.com/cli/
