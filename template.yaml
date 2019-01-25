@@ -126,7 +126,7 @@ Resources:
 
   TutorialPrivateSubnetNatRoute:
     Type: AWS::EC2::Route
-    DependsOn: NatGateway
+    DependsOn: TutorialNatGateway
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref TutorialNatGateway
@@ -231,7 +231,7 @@ Resources:
                 - s3:ListBucketByTags
                 - s3:ListBucketMultipartUploads
                 - s3:ListBucketVersions
-              Resource: !Sub TutorialBackupS3Bucket.Arn
+              Resource: !Sub ${TutorialBackupS3Bucket.Arn}
             - Effect: Allow
               Action:
                 - s3:PutObject
@@ -270,7 +270,7 @@ Resources:
               - s3:ListBucketByTags
               - s3:ListBucketMultipartUploads
               - s3:ListBucketVersions
-            Resource: !Sub TutorialBackupS3Bucket.Arn
+            Resource: !Sub ${TutorialBackupS3Bucket.Arn}
           - Effect: Allow
             Action:
               - s3:PutObject
