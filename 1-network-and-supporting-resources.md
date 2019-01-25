@@ -7,8 +7,7 @@ How many times have you gazed upon the list of services that Amazon is providing
 
 After clicking around at random and reading an unwholesome amount of bland introductory pages, I finally started to get an idea of how I should try to put all of these pieces together. The first thing I figured out:
 
-> It is way, way too hard to get everything up and running by clicking a bunch
-> of buttons.
+> It is way, way too hard to get everything up and running by clicking a bunch of buttons.
 
 What are your goals? For me, it's to be able to deploy a web-based application for one of my clients. As a corollary, I want to be able to entirely scrap a web-based application for one of my clients (maybe it's been replaced, maybe they've hired another consultant). In effect, that's two goals. Plus I would like to keep all of my clients separate, I don't want changes to a firewall rule to effect all of my clients, just the one client who's willing to take the risk. If you think about it, keeping things isolated will also make it easier to figure out who we can charge for what services at the end of the month; we should also tag these resources in a way that makes sense. That's four goals and that's only what we've thought of so far. And we should snapshot on a daily basis and maybe not keep all of the snapshots. Oh, backing up the database is important, too!
 
@@ -39,7 +38,7 @@ In the world of CloudFormation, the document you are writing is called a "templa
 
 You can write your template in [YAML][5] or [JSON][6], if you're writing it by hand (as we are right now) then I _strongly_ recommend that you write it in YAML. I know, I know, YAML isn't everyone's favorite but getting all of the ending braces and brackets lined up in a JSON document is it's own kind of mental torture. You deserve better, trust me: don't do that to yourself.
 
-Anyway, we're going to start off with a description and a parameter. A parameter, as you may have suspected, is a value that we can supply when we are actually using our template to provision something.
+Anyway, we're going to start off with a description and a parameter. A parameter, as you may have suspected, is a value that we can supply when we are actually using our template to provision something. Open up a new file in your favorite editor, type in the text below and save it as `template.yaml`.
 
 ```yaml
 Description: Provisions a simple cluster with a web and a database server
@@ -58,7 +57,7 @@ I'm not going to go into a big discussion about how to manage your EC2 key pairs
 
 ## Provision a New Virtual Private Cloud
 
-We need at least one resource in order to provision our template. For this project we're going to create our own [Virtual Private Cloud][8] (VPC) to hold our resources. This will keep things isolated from everything else you have might have deployed to AWS.
+We need at least one resource in order to provision our template. For this project we're going to create our own [Virtual Private Cloud][8] (VPC) to hold our resources. This will keep things isolated from everything else you might have deployed to AWS.
 
 ```yaml
 Resources:
@@ -82,9 +81,9 @@ We'd like Amazon to continue to assign names to our instances, so we set the `En
 
 ## Provision Resources With Our Template
 
-With our template set, we're ready to use it to provision some resources! When we provide the template to CloudFormation, we also have to provide our parameter values and we have the opportunity to tag _all_ of the provisioned resources (maybe be client or project or both).
+With our template set, we're ready to use it to provision some resources! When we provide the template to CloudFormation, we also have to provide our parameter values and we have the opportunity to tag _all_ of the provisioned resources (maybe by client or project or both).
 
-Go ahead and run the command below to being provisioning. When CloudFormation sets up all of the resources it links them together into a "stack". Once complete, you can deal with the stack as one unit. The stack name provides a human-friendly handle for all of the related resources.
+Go ahead and run the command below to begin provisioning. When CloudFormation sets up all of the resources it links them together into a "stack". Once complete, you can deal with the stack as one unit. The stack name provides a human-friendly handle for all of the related resources.
 
 ```shell
 aws cloudformation create-stack \
@@ -98,7 +97,7 @@ Remember to provide your own key pair name where we have used `cloudfront-tutori
 
 As soon as CloudFormation receives the template it will return a new `StackId` with the [Amazon Resource Name][15] (ARN) for the stack, you will have to wait a bit for the stack to finish being provisioned. You can check on your stack through the [CloudFormation web console][12] and see how things are going. Some resources take longer than others, CloudFormation will ensure they are created in the right order and work out the dependencies. This template should move along pretty quickly as we aren't provisioning much.
 
-I broke the command over several lines to try and make it easier to follow. We...
+I broke the command over several lines to try and make it easier to follow. In the `create-stack` command above we...
 
 * Ask the AWS tools to call out to CloudFormation with the "create-stack" command
 * Set the name of the stack we are creating to "tutorial"
@@ -106,7 +105,7 @@ I broke the command over several lines to try and make it easier to follow. We..
 * We set the one template parameter, `KeyPairName` (note the weird way we have to set parameters)
 * We provided a one tag key and value that CloudFormation will use to tag all of the provisioned resources
   
-Multiple parameters you can separate them with a space, multiple tags are separated with a comma. It's weird, I don't know why they aren't uniform.
+You may separate multiple parameters with a space, multiple tags are separated with a comma. It's weird, I don't know why they aren't uniform.
 
 When provisioning is complete, you can head over to the [VPC web console][13] to inspect your new virtual cloud. There's not a lot to see, but if you choose "Yourq VPCs" from the left-hand navigation bar and then select your "Tutorial VPC" from the list, you can click the "Tags" tab and look at the tags associated with the resource. You'll see the tag we specified in the template (`Name`) and the tag we passed into the `create-stack` command (`Project`). CloudFormation also set several tags of it's own, linking the resource to the stack.
 
@@ -328,7 +327,7 @@ We create our route, using the `DependsOn` attribute to indicate that we need th
 
 The final step is to associate our routing table with our private subnet. Whew!
 
-It was a long walk but we have accomplished a lot. Go ahead and provision your template and wait for CloudFormation to finish getting everything setup. From the CloudFormation web console, select your stack and click on the "Resources" tab to see all of the items that you have provisioned. This establishes your VPC and lays all of the groundwork you need, the next step is to get your instances provisioned.
+It was a long walk but we have accomplished a lot. Go ahead and provision your template and wait for CloudFormation to finish getting everything setup. From the CloudFormation web console, select your stack and click on the "Resources" tab to see all of the items that you have provisioned. Such progress!
 
 ## Setup Our Security Groups
 
@@ -358,7 +357,7 @@ Before we can provision our instances we need to get our [security groups][31] s
           IpProtocol: tcp
           FromPort: 22              # SSH
           ToPort: 22
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
 ```
 
@@ -382,7 +381,7 @@ In the example above we have opened up the remote desktop port and the SSH port 
           IpProtocol: tcp
           FromPort: 587             # SSL SMTP
           ToPort: 587
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
       Tags:
         - Key: "Name"
@@ -401,10 +400,10 @@ The security group for our private subnet is much simpler.
       VpcId: !Ref TutorialVPC
       GroupDescription: Private Subnet Security Group
       SecurityGroupIngress:
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
       SecurityGroupEgress:
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
         - CidrIp: 0.0.0.0/0         # Public Internet
           IpProtocol: tcp

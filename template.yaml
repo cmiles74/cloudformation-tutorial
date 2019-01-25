@@ -158,7 +158,7 @@ Resources:
           IpProtocol: tcp
           FromPort: 22              # SSH
           ToPort: 22
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0         # Public Internet
@@ -173,7 +173,7 @@ Resources:
           IpProtocol: tcp
           FromPort: 587             # SSL SMTP
           ToPort: 587
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
       Tags:
         - Key: "Name"
@@ -186,10 +186,10 @@ Resources:
       VpcId: !Ref TutorialVPC
       GroupDescription: Private Subnet Security Group
       SecurityGroupIngress:
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
       SecurityGroupEgress:
-        - CidrIp: 10.3.0.0/24       # Inside the VPC
+        - CidrIp: 10.6.0.0/24       # Inside the VPC
           IpProtocol: -1            # All traffic
         - CidrIp: 0.0.0.0/0         # Public Internet
           IpProtocol: tcp
