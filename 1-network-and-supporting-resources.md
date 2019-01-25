@@ -23,6 +23,8 @@ Looking at these goals, the number of services, the way many of them build on ea
 
 This is a first in a series of articles that will cover all of these goals. We'll start out with an empty file and we'll gradually build that file up, adding more and more resources to that file as we go along. I am planning three articles all together, this on covers a brief introduction to the tools and gets as far as setting up a virtual private cloud for the project, splitting it into two networks and putting security groups in place. So exciting!
 
+I encourage you to follow along as we build up the template but you can always checkout the finished product [over at GitHub][35].
+
 ## Install the AWS Command Line Tools
 
 Amazon provides a goofy drag-and-drop interface for CloudFormation but that runs kind of counter to the whole point of this article. You can also write your CloudFormation template and then upload it via their web interface, I think that's also a little clunky. My recommendation is that you install the [AWS Command Line Tools][1] and use those tools to deploy. Amazon also provides packages for Windows, but if you're working from within the Windows environment you might be more interested in the [AWS Tools for PowerShell][2] which do much the same thing but, you know, with [PowerShell][3].
@@ -479,4 +481,4 @@ Thank you for reading!
 [32]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
 [33]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group-rule.html
 [34]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
-
+[35]: https://github.com/cmiles74/cloudformation-tutorial
