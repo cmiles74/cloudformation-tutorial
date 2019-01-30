@@ -283,3 +283,67 @@ Resources:
     Properties:
       Roles:
         - !Ref TutorialInstanceRole
+
+  #
+  # Instances
+  #
+  TutorialDatabaseServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            setBackupS3Bucket:
+              command: !Sub |
+                echo "BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
+    Properties:
+      ImageId: "ami-0ac019f4fcb7cb7e6"
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - SubnetId: !Ref TutorialPrivateSubnet
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref TutorialPrivateSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: 250
+            VolumeType: gp2
+      IamInstanceProfile: !Ref TutorialInstanceProfile
+      Tags:
+        - Key: "Name"
+          Value: "Tutorial Database Server"
+
+
+  TutorialWebServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            setBackupS3Bucket:
+              command: !Sub |
+                echo "BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
+            setDatabaseServer:
+              command: !Sub |
+                echo "DATABASE_SERVER=\"${TutorialDatabaseServer.PrivateIp}\"" >> /etc/profile.d/cloudformation-init.sh
+    Properties:
+      ImageId: "ami-0ac019f4fcb7cb7e6"
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairName
+      NetworkInterfaces:
+        - SubnetId: !Ref TutorialPublicSubnet
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref TutorialPrivateSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: 250
+            VolumeType: gp2
+      IamInstanceProfile: !Ref TutorialInstanceProfile
+      Tags:
+        - Key: "Name"
+          Value: "Tutorial Web Server"
+

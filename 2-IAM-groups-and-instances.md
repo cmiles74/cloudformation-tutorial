@@ -1,4 +1,9 @@
-# Provision Pragmatically and Programmatically with CloudFormation
+---
+layout: post
+title: Provision Pragmatically and Programmatically with CloudFormation, 2
+---
+
+![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram-2.png "Diagram of our CloudFormation Tutorial Stack")
 
 This is the second part in a three part series where we build up a CloudFormation template for what I think of as a pretty typical environment: one virtual private cloud broken into two subnets and including two instances. If you haven't read the first part in the series, I encourage you to check it out now!
 

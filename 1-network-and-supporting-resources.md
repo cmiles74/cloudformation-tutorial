@@ -1,7 +1,9 @@
-# Provision Pragmatically and Programmatically with CloudFormation
+---
+layout: post
+title: Provision Pragmatically and Programmatically with CloudFormation
+---
 
-![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram.png
-"Diagram of our CloudFormation Tutorial Stack")
+![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram.png "Diagram of our CloudFormation Tutorial Stack")
 
 How many times have you gazed upon the list of services that Amazon is providing through their Amazon Web Services (AWS) family of products and felt an unpleasant mixture of anxiety and confusion? If you're anything like me, it would be literally _every time_ you visited their website. While I was one of the first in my circle of software developer friends to get on board the Elastic Compute Cloud (EC2) train, I haven't been great at keeping up with new developments. This year, I decided, would be the year that I get back on track and sort out this alphabet soup of cloud virtualization technology.
 
