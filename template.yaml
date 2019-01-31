@@ -307,9 +307,9 @@ Resources:
           commands:
             setBackupS3Bucket:
               command: !Sub |
-                echo "BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
+                echo "export BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
     Properties:
-      ImageId: "ami-0ac019f4fcb7cb7e6"
+      ImageId: "ami-035be7bafff33b6b6"
       InstanceType: t2.micro
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
@@ -318,7 +318,7 @@ Resources:
           GroupSet:
             - !Ref TutorialPrivateSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/sda1"
+        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -326,6 +326,11 @@ Resources:
       Tags:
         - Key: "Name"
           Value: "Tutorial Database Server"
+      UserData: 
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash -xe
+            /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialDatabaseServer
 
 
   TutorialWebServer:
@@ -336,12 +341,12 @@ Resources:
           commands:
             setBackupS3Bucket:
               command: !Sub |
-                echo "BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
+                echo "export BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
             setDatabaseServer:
               command: !Sub |
-                echo "DATABASE_SERVER=\"${TutorialDatabaseServer.PrivateIp}\"" >> /etc/profile.d/cloudformation-init.sh
+                echo "export DATABASE_SERVER=\"${TutorialDatabaseServer.PrivateIp}\"" >> /etc/profile.d/cloudformation-init.sh
     Properties:
-      ImageId: "ami-0ac019f4fcb7cb7e6"
+      ImageId: "ami-035be7bafff33b6b6"
       InstanceType: t2.micro
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
@@ -350,7 +355,7 @@ Resources:
           GroupSet:
             - !Ref TutorialPublicSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/sda1"
+        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -358,4 +363,9 @@ Resources:
       Tags:
         - Key: "Name"
           Value: "Tutorial Web Server"
+      UserData: 
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash -xe
+            /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialWebServer
 
