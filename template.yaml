@@ -130,14 +130,26 @@ Resources:
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref TutorialNatGateway
-      RouteTableId: !Ref TutorialPrivateRouteTable        
+      RouteTableId: !Ref TutorialPrivateRouteTable
+
+  TutorialPublicSubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref TutorialPublicRouteTable
+      SubnetId: !Ref TutorialPublicSubnet
+
+  TutorialPrivateSubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref TutorialPrivateRouteTable
+      SubnetId: !Ref TutorialPrivateSubnet
 
   #
   # Security Groups
   #
   TutorialPublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    Description: "Web Server Security Group"
+    Description: "Public Security Group"
     Properties:
       VpcId: !Ref TutorialVPC
       GroupDescription: Web Server Security Group
@@ -336,7 +348,7 @@ Resources:
         - SubnetId: !Ref TutorialPublicSubnet
           DeviceIndex: 0
           GroupSet:
-            - !Ref TutorialPrivateSecurityGroup
+            - !Ref TutorialPublicSecurityGroup
       BlockDeviceMappings:
         - DeviceName: "/dev/sda1"
           Ebs:

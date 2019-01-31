@@ -320,14 +320,20 @@ Now we can setup our route for the private subnet to get to the internet via our
 We create our route, using the `DependsOn` attribute to indicate that we need the `NatGateway` provisioned before this route is created. Then we use the `NatGateway` property to link in our gateway and the `RouteTableId` to tie the route to our routing table.
 
 ```yaml
-  TutorialPrivateSubnetNatRouteTableAssociation:
+  TutorialPublicSubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref TutorialPublicRouteTable
+      SubnetId: !Ref TutorialPublicSubnet
+
+  TutorialPrivateSubnetRouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref TutorialPrivateRouteTable
       SubnetId: !Ref TutorialPrivateSubnet
 ```
 
-The final step is to associate our routing table with our private subnet. Whew!
+The final step is to associate our routing table with our subnets. Whew!
 
 It was a long walk but we have accomplished a lot. Go ahead and provision your template and wait for CloudFormation to finish getting everything setup. From the CloudFormation web console, select your stack and click on the "Resources" tab to see all of the items that you have provisioned. Such progress!
 
