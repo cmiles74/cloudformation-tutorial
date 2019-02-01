@@ -3,8 +3,6 @@ layout: post
 title: Provision Pragmatically and Programmatically with CloudFormation, 2
 ---
 
-![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram-2.png "Diagram of our CloudFormation Tutorial Stack")
-
 This is the second part in a three part series where we build up a CloudFormation template for what I think of as a pretty typical environment: one virtual private cloud broken into two subnets and including two instances. If you haven't read the first part in the series, I encourage you to check it out now!
 
 ## Setup an "Admininstrators" Group
@@ -270,6 +268,10 @@ If the Cost Explorer has data on hand then you will be presented with another da
 On the right-hand side is a list of filters and this is where the tags will come in handy. Click on the "Tag" link in the filter list, a list of your tags will appear; click on "Project" and a list of all your values for the "Project" tag will be listed. In this tutorial we've been putting "cf-tutorial" in the "Project" tags, check the box for "cf-tutorial" and then press the "Apply filters" button to update the report.
 
 What you are looking at now is likely a very dull report, because we've been using low-cost free-tier instances. But, still, what we have is a report on just the resources that belong to this project. If you were to place a "Client" tag in your templates you could report on the entire cost of a client (maybe you could use that to figure out how to bill) or break down a client's costs by particular projects. It is a valuable tool and definitely worth putting some time in exploring your options.
+
+## Snapshot Instance Volumes
+
+
 
 ------
 [35]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-group.html
