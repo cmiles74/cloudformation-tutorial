@@ -32,7 +32,7 @@ For this project we're creating a general "administrators" group that has access
               Resource: !Sub ${TutorialBackupS3Bucket.Arn}/*
 ```
 
-We use the [IAM Group resource][35] to create our new group. The only property that we provide is the `Policies` property that contains a list of `PolicyName` and ``PolicyDocument` pairs, in this case we define only one that we have named "TutorialAdminPolicy".
+We use the [IAM Group resource][35] to create our new group. The only property that we provide is the `Policies` property that contains a list of `PolicyName` and `PolicyDocument` pairs, in this case we define only one that we have named "TutorialAdminPolicy".
 
 A `PolicyDocument`contains a `Statement` that holds a list of `Effect` instances; each of those in turn contains an `Action` property with a list of permissions. We use the `Resource` property to tie in a references to our bucket, in this case the backup bucket's ARN. If we take a look at the first `Effect`, you'll see that we've assigned four "ListBucket..." permissions for our backup bucket.
 
