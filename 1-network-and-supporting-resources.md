@@ -333,9 +333,7 @@ We create our route, using the `DependsOn` attribute to indicate that we need th
       SubnetId: !Ref TutorialPrivateSubnet
 ```
 
-The final step is to associate our routing table with our subnets. Whew!
-
-It was a long walk but we have accomplished a lot. Go ahead and provision your template and wait for CloudFormation to finish getting everything setup. From the CloudFormation web console, select your stack and click on the "Resources" tab to see all of the items that you have provisioned. Such progress!
+The final step is to associate our routing table with our subnets! We use the [SubnetRouteTableAssociation][36] to attach our table of routes to the matching subnet.
 
 ## Setup Our Security Groups
 
@@ -359,10 +357,6 @@ Before we can provision our instances we need to get our [security groups][31] s
           ToPort: 443
         - CidrIp: 0.0.0.0/0         # Replace with your IP Range
           IpProtocol: tcp
-          FromPort: 3389            # MS Remote Desktop
-          ToPort: 3389
-        - CidrIp: 0.0.0.0/0         # Replace with your IP Range
-          IpProtocol: tcp
           FromPort: 22              # SSH
           ToPort: 22
         - CidrIp: 10.6.0.0/24       # Inside the VPC
@@ -371,9 +365,9 @@ Before we can provision our instances we need to get our [security groups][31] s
 
 We use the [SecurityGroup resource][32] to create our new group for the public subnet. The `Description` we provide is visible in the web console and then we move on to the properties. We use the `VpcId` property to indicate that this group is for our VPC and then provide another, very similar description, for the `GroupDescription` (this property is required).
 
-With that out of the way, we move on to the in-bound (ingress) rules. Each rule is provided by a [Security Group Rule property][33] that is made up of an IP address range, the protocol and then a range of ports. We have created rules for HTTP, HTTPS, Remote Desktop, SSH and traffic inside of our VPC.
+With that out of the way, we move on to the in-bound (ingress) rules. Each rule is provided by a [Security Group Rule property][33] that is made up of an IP address range, the protocol and then a range of ports. We have created rules for HTTP, HTTPS, and SSH and traffic inside of our VPC. If you were provisioning a Windows instance, don't forget to add port 3389 for Remote Desktop access.
 
-In the example above we have opened up the remote desktop port and the SSH port to the entire internet: this is not a great idea. Since these ports are used almost exclusively for management of the instances, a better choice would be to open these ports up to the address range that is used by your office. If you don't have a fixed range of addresses you can use then I encourage you to look into other solutions, perhaps using a VPN.
+In the example above we have opened up the SSH port to the entire internet: this is not a great idea. Since these ports are used almost exclusively for management of the instances, a better choice would be to open these ports up to the address range that is used by your office. If you don't have a fixed range of addresses you can use then I encourage you to look into other solutions, perhaps using a VPN.
 
 ```yaml
       SecurityGroupEgress:
@@ -446,6 +440,8 @@ The nice thing about setting these up before the instances is that we can tell t
 
 Simple enough! We use the [Bucket resource][34] to create our bucket and we set that bucket to be private with the `AccessControl` property.
 
+It was a long walk but we have accomplished a lot. Go ahead and provision your template and wait for CloudFormation to finish getting everything setup. From the CloudFormation web console, select your stack and click on the "Resources" tab to see all of the items that you have provisioned. Such progress!
+
 ## Until Next Time
 
 That is all we are going to cover in this article, we went over a lot of material. In the next piece in the series we'll setup some groups and roles and actually provision some instances.
@@ -489,3 +485,4 @@ Thank you for reading!
 [33]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group-rule.html
 [34]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
 [35]: https://github.com/cmiles74/cloudformation-tutorial
+[36]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet-route-table-assoc.html
