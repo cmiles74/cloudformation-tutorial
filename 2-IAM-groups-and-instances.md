@@ -34,9 +34,9 @@ For this project we're creating a general "administrators" group that has access
 
 We use the [IAM Group resource][35] to create our new group. The only property that we provide is the `Policies` property that contains a list of `PolicyName` and `PolicyDocument` pairs, in this case we define only one that we have named "TutorialAdminPolicy".
 
-A `PolicyDocument`contains a `Statement` that holds a list of `Effect` instances; each of those in turn contains an `Action` property with a list of permissions. We use the `Resource` property to tie in a references to our bucket, in this case the backup bucket's ARN. If we take a look at the first `Effect`, you'll see that we've assigned four "ListBucket..." permissions for our backup bucket.
+A `PolicyDocument`contains a `Statement` that holds a list of `Effect` instances; each of those in turn contains an `Action` property with a list of permissions. We use the `Resource` property to tie in a reference to our bucket, in this case the backup bucket's ARN. If we take a look at the first `Effect`, you'll see that we've assigned four "ListBucket..." permissions for our backup bucket. The second effect applied three more actions to every file in the backup bucket, that's indicated by the `/*` at the end of the bucket's ARN.
 
-Any account that we add to this group will be able to inspect and download the files in the bucket. By files, we mean database dumps for this project. They will also be able to pull up the S3 console for the bucket but they will need a link that is _directly for the bucket_. They will not be able to log into S3 and browse the list of all buckets.
+Any account that we add to this group will be able to download or delete any of the files in the bucket (as well as upload). In this case when we say "files" we really mean database dumps for this project. They will also be able to pull up the S3 console for the bucket but they will need a link that is _directly to the bucket_. They will not be able to log into S3 and browse the list of all buckets.
 
 One last note: since we are creating an IAM role with our template, we need to let CloudFormation know that this is okay. From here on out we need to add the `--capabilities` flag to our `aws` commands.
 
@@ -83,7 +83,7 @@ We use the [Role resource][36] to create our new instance role and we assign thr
 * the next lets the instance interact with [Systems Manager][38], letting us manage the instances as a group
 * The last provides read-only access to the Systems Manager parameter store.
 
-Amazon's CloudWatch service will aggregate data submitted by your instances and let you setup reports, dashboards and alerts based on this data (i.e. when CPU usage gets too high or available disk space is too low). Systems Manager provides some tools for managing for instances, like installing patches or a software package. It lets you perform these actions on several instances as a group, which can be handy. I'm not going to go over these services in-depth here but I encourage you to spend some time checking them out if you haven't done so already.
+Amazon's CloudWatch service will aggregate data submitted by your instances and let you setup reports, dashboards and alerts based on this data (i.e. when CPU usage gets too high or available disk space is too low). Systems Manager provides some tools for managing your instances, like installing patches or a software package. It lets you perform these actions on several instances as a group which can be handy. I'm not going to go over these services in-depth here but I encourage you to spend some time checking them out if you haven't done so already.
 
 ```yaml
   TutorialInstanceRolePolicy:
@@ -109,7 +109,7 @@ Amazon's CloudWatch service will aggregate data submitted by your instances and 
             Resource: !Sub ${TutorialBackupS3Bucket.Arn}/*
 ```
 
-We are creating a new [Policy resource][39] that we will assign to our instances. We link the role we just creates and then add a new policy that provides access to the backup bucket. As you can see, it is exactly the same as the role that we created for our administrators group.
+We are creating a new [Policy resource][39] that we will assign to our instances. We link the role we just created and then add a new policy that provides access to the backup bucket. As you can see, it is exactly the same as the role that we created for our administrators group.
 
 The last piece of this puzzle is an "instance profile" that we can assign to our instances.
 
@@ -146,7 +146,7 @@ initialization script (we will call that at the very end) with the
 [CouldFormation Init type][42]. This is were we tell the initialization script
 what we would like it to do when it runs, in this case we add a new environment
 variable to a new file in `/etc/profile.d` called `cloudformation-init.sh`.
-Whenever someone logs into the machine, this script (along with everything else
+Whenever someone logs into the machine this script (along with everything else
 in the directory) will be evaluated, the end result will be that the name of
 our backup bucket will be available through the `BACKUP_S3_BUCKET` environment
 variable. Keep in mind that this metadata doesn't do anything on it's own: the
@@ -166,7 +166,7 @@ Next we'll set the properties for our instance...
           GroupSet:
             - !Ref TutorialPrivateSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
+        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubuntu /dev/sda1)
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -180,15 +180,15 @@ First we choose the image we'd like for this instance, in the code above we've c
 
 Next we choose our instance type, I chose `t2.micro` because this is a tutorial and I don't want to cost you money, this type is eligible for use under [Amazon's free tier][45]. If you haven't used up your 750 hours of free tier usage for the month you shouldn't be charged for provisioning these instances. Setting cost aside, a micro instance is likely enough to host a low traffic website, like your personal blog.
 
-We set the name of the key pair we want to use to provision our instance, note that the value we reference in the `KeyName` property is the one parameter we set for this script, back in part 1. You will need to have this key pair handy in order to SSH to the instance.
+We set the name of the key pair we want to use to provision our instance, note that the value we reference in the `KeyName` property is the one parameter we set for this script back in part 1. You will need to have this key pair handy in order to SSH to the instance.
 
 We'd like the database server to be on our private subnet and we take care of that when we specify the `NetworkInterfaces` property. Here we pass in a reference to our private subnet, we then set the security group to our "private" security group with the `GroupSet` property of the network interface.
 
-Every instance need disk space and we can customize the [Elastic Block Store][46] (EBS) volumes for our instance with the `BlockDeviceMappings` property. We map in one volume of 250GB to the device `/dev/xvda` on our instance, we chose the "general purpose" (gp2) volume type.
+Every instance needs disk space and we can customize the [Elastic Block Store][46] (EBS) volumes for our instance with the `BlockDeviceMappings` property. We map in one volume of 250GB to the device `/dev/xvda` on our instance, we chose the "general purpose" (gp2) volume type.
 
 The default volume type is "gp2" and it's a reasonable choice, more information about the various types may be found in the [EBS volume type documentation][47]. Also note that the root device that the instance boots from may vary from one Linux distribution to the other. For instance, under Ubuntu the root volume needs to be mapped to `/dev/sda1`; if the instance can't find the volume you will see it start up in the EC2 console but it will stop in just a couple of minutes.
 
-Instead of managing credentials for our EC2 instances we thoughtfully created a profile in part 1 of this series. We set the profile for our instance with the `IamInstanceProfile` property and pass in a reference to that profile.
+Instead of managing credentials for our EC2 instances we thoughtfully created a profile! We set the profile for our instance with the `IamInstanceProfile` property and pass in a reference to that profile.
 
 Lastly we set tags on our instance, in this case we set the "Name" tag.
 
@@ -202,7 +202,7 @@ With that out of the way the only thing left to do is to invoke the CloudFormati
             /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialDatabaseServer
 ```
 
-Documentation for the `cfn-init` is [available on the CloudFormation site][48]. You can see in the example above that we call the script with the name of our stack, the stack's deployment region and the name of our server. When the script runs it will inspect the `Metadata` property that we set at the the beginning of our instance stanza and will carry out those tasks. For this instance, the initialization script will add that new file to `/etc/profile.d` with our custom environment variables.
+Documentation for `cfn-init` is [available on the CloudFormation site][48]. You can see in the example above that we call the script with the name of our stack, the stack's deployment region and the name of our server. When the script runs it will inspect the `Metadata` property that we set at the the beginning of our instance stanza and will carry out those tasks. For this instance, the initialization script will add that new file to `/etc/profile.d` with our custom environment variables.
 
 And that's it... For our database server. We need to do pretty much the same thing for our web server.
 
@@ -227,7 +227,7 @@ And that's it... For our database server. We need to do pretty much the same thi
           GroupSet:
             - !Ref TutorialPublicSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
+        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubuntu /dev/sda1)
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -244,7 +244,7 @@ And that's it... For our database server. We need to do pretty much the same thi
 
 Mostly everything is exactly the same but there are a couple small differences. When we setup the `Metadata` for the initialization script we added another environment variable that contains the private IP address of the database server, in this way we can deploy this template more than once and the web server in each stack will know where to find it's matching database server. We've also places the web server in the public subnet so that it can communicate with the public internet (as web servers so often need to do).
 
-At this point we have covered the first three goals that we laid out for ourselves in part 1. With the template as it stands right now, we can...
+At this point we have covered the first four goals that we laid out for ourselves in part 1. With the template as it stands right now, we can...
 
 * Provision resources for a project
 * Retire resources for a project
@@ -261,17 +261,13 @@ If you haven't done so already, click on the "Cost Explorer" link from the left-
 
 Next click on the "Cost Allocation Tags" link, also on the left-hand navigation bar. At the top you can see that there are some cost allocation tags that AWS can generate on it's own, go ahead and click the "Activate" button to turn those on. Lower down on the page will be a list of all of the tags that we have defined (as well as any tags you had already setup). You can choose which tags you want to make available in the Cost Explorer but my advice is just to click the top-most checkbox and make them all active. You never know when a tag will come in handy! Click the "Activate" button and confirm that, yes, you want the tags to be "active".
 
-Now click back to the "Cost Explorer" link and click on the "Launch Cost Explorer" link. If you just activated the cost explorer now, you will probably have to wait until tomorrow; keep it in mind and try to come back to this section.
+Now click back to the "Cost Explorer" link and click on "Launch Cost Explorer". If you just activated the cost explorer now, you will probably have to wait until tomorrow; keep it in mind and try to come back to this section.
 
 If the Cost Explorer has data on hand then you will be presented with another dashboard attempting to summarize your costs on amazon. Click on the magnifying glass icon on the left-hand navigation bar and choose "Cost and Usage", the report builder will appear with your last six months of spending. Click on the "Last 6 Months" pull-down and choose "1M" from the "Historical" section at the bottom, this will show your last month of spending. 
 
 On the right-hand side is a list of filters and this is where the tags will come in handy. Click on the "Tag" link in the filter list, a list of your tags will appear; click on "Project" and a list of all your values for the "Project" tag will be listed. In this tutorial we've been putting "cf-tutorial" in the "Project" tags, check the box for "cf-tutorial" and then press the "Apply filters" button to update the report.
 
-What you are looking at now is likely a very dull report, because we've been using low-cost free-tier instances. But, still, what we have is a report on just the resources that belong to this project. If you were to place a "Client" tag in your templates you could report on the entire cost of a client (maybe you could use that to figure out how to bill) or break down a client's costs by particular projects. It is a valuable tool and definitely worth putting some time in exploring your options.
-
-## Snapshot Instance Volumes
-
-
+What you are looking at now is likely a very dull report, because we've been using low-cost free-tier instances. But, still, what we have is a report on just the resources that belong to this project. If you were to place a "Client" tag in your templates you could report on the entire cost of a client (maybe you could use that to figure out how to bill) and you can break down a client's costs by particular projects. It is a valuable tool and definitely worth putting some time in exploring your options.
 
 ------
 [35]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-group.html
