@@ -304,12 +304,12 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         config:
-          commands:
-            setBackupS3Bucket:
-              command: !Sub |
-                echo "export BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
+          files:
+            /etc/profile.d/cloudformation-init.sh:
+              content: !Sub |
+                export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"
+      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
       InstanceType: t2.micro
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
@@ -338,15 +338,13 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         config:
-          commands:
-            setBackupS3Bucket:
-              command: !Sub |
-                echo "export BACKUP_S3_BUCKET=\"${TutorialBackupS3Bucket}\"" >> /etc/profile.d/cloudformation-init.sh
-            setDatabaseServer:
-              command: !Sub |
-                echo "export DATABASE_SERVER=\"${TutorialDatabaseServer.PrivateIp}\"" >> /etc/profile.d/cloudformation-init.sh
+          files:
+            /etc/profile.d/cloudformation-init.sh:
+              content: !Sub |
+                export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
+                export DATABASE_SERVER="${TutorialDatabaseServer.PrivateIp}"
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"
+      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
       InstanceType: t2.micro
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
