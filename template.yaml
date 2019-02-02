@@ -297,6 +297,15 @@ Resources:
         - !Ref TutorialInstanceRole
 
   #
+  # Log Groups
+  #
+  TutorialBootLog:
+    Type: AWS::Logs::LogGroup
+
+  TutorialKernelLog:
+    Type: AWS::Logs::LogGroup
+
+  #
   # Instances
   #
   TutorialDatabaseServer:
@@ -308,6 +317,82 @@ Resources:
             /etc/profile.d/cloudformation-init.sh:
               content: !Sub |
                 export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
+            /etc/amazon/amazon-cloudwatch-agent.json:
+              content: !Sub |
+                {
+                  "metrics": {
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "cpu": {
+                        "measurement": [
+                          "cpu_usage_idle",
+                          "cpu_usage_iowait",
+                          "cpu_usage_user",
+                          "cpu_usage_system"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "totalcpu": false
+                      },
+                      "disk": {
+                        "measurement": [
+                          "used_percent",
+                          "inodes_free"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "diskio": {
+                        "measurement": [
+                          "io_time"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "mem": {
+                        "measurement": [
+                          "mem_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      },
+                      "statsd": {
+                        "metrics_aggregation_interval": 30,
+                        "metrics_collection_interval": 10,
+                        "service_address": ":8125"
+                      },
+                      "swap": {
+                        "measurement": [
+                          "swap_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      }
+                    }
+                  },
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                            "log_group_name": "${TutorialBootLog}",
+                            "file_path": "/var/log/boot.log"
+                          },
+                          {
+                            "log_group_name": "${TutorialKernelLog}",
+                            "file_path": "/var/log/messages"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
     Properties:
       ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
       InstanceType: t2.micro
@@ -330,7 +415,16 @@ Resources:
         Fn::Base64: 
           !Sub |
             #!/bin/bash -xe
+
+            # cloudformation initialize
             /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialDatabaseServer
+
+            # download and install cloudwatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            yum -y install amazon-cloudwatch-agent.rpm
+            mv /etc/amazon/amazon-cloudwatch-agent.json /etc/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.json
+            sudo systemctl enable amazon-cloudwatch-agent
+            sudo systemctl start amazon-cloudwatch-agent
 
 
   TutorialWebServer:
@@ -343,6 +437,82 @@ Resources:
               content: !Sub |
                 export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
                 export DATABASE_SERVER="${TutorialDatabaseServer.PrivateIp}"
+            /etc/amazon/amazon-cloudwatch-agent.json:
+              content: !Sub |
+                {
+                  "metrics": {
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "cpu": {
+                        "measurement": [
+                          "cpu_usage_idle",
+                          "cpu_usage_iowait",
+                          "cpu_usage_user",
+                          "cpu_usage_system"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "totalcpu": false
+                      },
+                      "disk": {
+                        "measurement": [
+                          "used_percent",
+                          "inodes_free"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "diskio": {
+                        "measurement": [
+                          "io_time"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "mem": {
+                        "measurement": [
+                          "mem_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      },
+                      "statsd": {
+                        "metrics_aggregation_interval": 30,
+                        "metrics_collection_interval": 10,
+                        "service_address": ":8125"
+                      },
+                      "swap": {
+                        "measurement": [
+                          "swap_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      }
+                    }
+                  },
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                            "log_group_name": "${TutorialBootLog}",
+                            "file_path": "/var/log/boot.log"
+                          },
+                          {
+                            "log_group_name": "${TutorialKernelLog}",
+                            "file_path": "/var/log/messages"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
     Properties:
       ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
       InstanceType: t2.micro
@@ -365,5 +535,61 @@ Resources:
         Fn::Base64: 
           !Sub |
             #!/bin/bash -xe
+
+            # cloudformation initialize
             /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialWebServer
 
+            # download and install cloudwatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            yum -y install amazon-cloudwatch-agent.rpm
+            mv /etc/amazon/amazon-cloudwatch-agent.json /etc/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.json
+            sudo systemctl enable amazon-cloudwatch-agent
+            sudo systemctl start amazon-cloudwatch-agent
+
+  #
+  # Topic for monitoring alarms
+  #
+  # Subscriptions may be created through the SNS console (i.e. email, SMS, etc.)
+  #
+  TutorialAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TutorialAlarms
+
+  #
+  # Alarms
+  #
+  TutorialDatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database Server CPU Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialDatabaseServer
+
+  TutorialWebCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database Server CPU Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialWebServer
+       
