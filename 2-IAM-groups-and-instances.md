@@ -321,7 +321,7 @@ Mostly everything is exactly the same but there are a couple small differences. 
 
 I don't include it in this article, but we provide the exact same configuration file for the CloudWatch agent that we used for the web server. If you are writing the template along with this article, take a minute to copy and paste that stanza into the file now.
 
-```
+```yaml
     Properties:
       ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
