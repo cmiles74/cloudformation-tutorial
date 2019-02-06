@@ -11,6 +11,22 @@ Parameters:
   KeyPairName:
     Type: String
     Description: The name of the keypair used when provisioning instances
+  InstanceType:
+    Type: String
+    Description: Instance type to provision
+    Default: t2.micro
+  ImageId:
+    Type: String
+    Description: Image to use when provisioning instances
+    Default: ami-035be7bafff33b6b6  # Amazon Linux 2
+  RootDevice:
+    Type: String
+    Description: Name of the root device on provisioned instances
+    Default: xvda  # varies based on Linux type (Ubunut /dev/sda1)
+  RootFsType:
+    Type: String
+    Description: File system type for root device
+    Default: xfs
 
 Resources:
 
@@ -394,8 +410,8 @@ Resources:
                   }
                 }
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
-      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
         - SubnetId: !Ref TutorialPrivateSubnet
@@ -403,7 +419,7 @@ Resources:
           GroupSet:
             - !Ref TutorialPrivateSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
+        - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -514,8 +530,8 @@ Resources:
                   }
                 }
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
-      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
         - SubnetId: !Ref TutorialPublicSubnet
@@ -523,7 +539,7 @@ Resources:
           GroupSet:
             - !Ref TutorialPublicSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubunut /dev/sda1)
+        - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
             VolumeSize: 250
             VolumeType: gp2
@@ -576,6 +592,33 @@ Resources:
         - Name: InstanceId
           Value: !Ref TutorialDatabaseServer
 
+  TutorialDatabaseDiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database Server Disk Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialDatabaseServer
+        - Name: ImageId
+          Value: !Ref ImageId
+        - Name: InstanceType
+          Value: !Ref InstanceType
+        - Name: path
+          Value: /
+        - Name: device
+          Value: !Sub ${RootDevice}1
+        - Name: fstype
+          Value: !Ref RootFsType
+
   TutorialWebCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -592,4 +635,30 @@ Resources:
       Dimensions:
         - Name: InstanceId
           Value: !Ref TutorialWebServer
-       
+
+  TutorialWebDiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Web Server Disk Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialWebServer
+        - Name: ImageId
+          Value: !Ref ImageId
+        - Name: InstanceType
+          Value: !Ref InstanceType
+        - Name: path
+          Value: /
+        - Name: device
+          Value: !Sub ${RootDevice}1
+        - Name: fstype
+          Value: !Ref RootFsType
