@@ -153,17 +153,7 @@ We're going to provision the database server first. This one is a little bit inv
 
 Note that in the code stanza above I stop before the properties, we'll go over the properties next. 
 
-The first thing we do is setup the "metadata" for the CloudFormation
-initialization script (we will call that at the very end) with the
-[CouldFormation Init type][42]. This is were we tell the initialization script
-what we would like it to do when it runs, in this case we add a new environment
-variable to a new file in `/etc/profile.d` called `cloudformation-init.sh`.
-Whenever someone logs into the machine this script (along with everything else
-in the directory) will be evaluated, the end result will be that the name of
-our backup bucket will be available through the `BACKUP_S3_BUCKET` environment
-variable. Keep in mind that this metadata doesn't do anything on it's own: the
-initialization script will use it when it runs and we'll do that at the end of
-our instance definition.
+The first thing we do is setup the "metadata" for the CloudFormation initialization script (we will call that at the very end) with the [CouldFormation Init type][42]. This is were we tell the initialization script what we would like it to do when it runs, in this case we add a new environment variable to a new file in `/etc/profile.d` called `cloudformation-init.sh`. Whenever someone logs into the machine this script (along with everything else in the directory) will be evaluated, the end result will be that the name of our backup bucket will be available through the `BACKUP_S3_BUCKET` environment variable. Keep in mind that this metadata doesn't do anything on it's own: the initialization script will use it when it runs and we'll do that at the end of our instance definition.
 
 We also need to provide the configuration file for the CloudWatch agent. This agent will collect performance data and log files and ship them back to the CloudWatch service.
 
