@@ -57,6 +57,29 @@ Some decisions are best postponed until the absolute last minute and parameters 
 
 I'm not going to go into a big discussion about how to manage your EC2 key pairs. Maybe you have one per person who has access to provision instances. Maybe you have one per client. However you manage it, you can pass it in when you provision resources.
 
+Next we're going to add some more parameters but we'll be providing default values for all of them. The thinking here is two-fold: first, we want the flexibility to be able to change some of the features at provisioning time. Second, we can reference these parameters throughout the template and this keeps us from sprinkling these identical values throughout the template.
+
+```yaml
+  InstanceType:
+    Type: String
+    Description: Instance type to provision
+    Default: t2.micro
+  ImageId:
+    Type: String
+    Description: Image to use when provisioning instances
+    Default: ami-035be7bafff33b6b6  # Amazon Linux 2
+  RootDevice:
+    Type: String
+    Description: Name of the root device on provisioned instances
+    Default: xvda  # varies based on Linux type (Ubunut /dev/sda1)
+  RootFsType:
+    Type: String
+    Description: File system type for root device
+    Default: xfs
+```
+
+You can see that these all relate to the instances that we will be provisioning. We call out the instance type, the image we'll use to create the instances and the name of the root volume and it's file type. Note that the root volume and file type aren't something we can really choose, they are dictated by the image (in this case, Amazon Linux 2).
+
 ## Provision a New Virtual Private Cloud
 
 We need at least one resource in order to provision our template. For this project we're going to create our own [Virtual Private Cloud][8] (VPC) to hold our resources. This will keep things isolated from everything else you might have deployed to AWS.
