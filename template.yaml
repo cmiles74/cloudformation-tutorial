@@ -19,6 +19,10 @@ Parameters:
     Type: String
     Description: Image to use when provisioning instances
     Default: ami-035be7bafff33b6b6  # Amazon Linux 2
+  VolumeSize:
+    Type: Number
+    Description: Size of the volume in GB
+    Default: 250
   RootDevice:
     Type: String
     Description: Name of the root device on provisioned instances
@@ -421,7 +425,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
-            VolumeSize: 250
+            VolumeSize: !Ref VolumeSize
             VolumeType: gp2
       IamInstanceProfile: !Ref TutorialInstanceProfile
       Tags:
@@ -541,7 +545,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
-            VolumeSize: 250
+            VolumeSize: !Ref VolumeSize
             VolumeType: gp2
       IamInstanceProfile: !Ref TutorialInstanceProfile
       Tags:

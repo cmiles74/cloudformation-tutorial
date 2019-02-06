@@ -157,8 +157,8 @@ Next we'll set the properties for our instance...
 
 ```yaml
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
-      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
         - SubnetId: !Ref TutorialPrivateSubnet
@@ -166,9 +166,9 @@ Next we'll set the properties for our instance...
           GroupSet:
             - !Ref TutorialPrivateSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubuntu /dev/sda1)
+        - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
-            VolumeSize: 250
+            VolumeSize: !Ref VolumeSize
             VolumeType: gp2
       IamInstanceProfile: !Ref TutorialInstanceProfile
       Tags:
@@ -176,15 +176,17 @@ Next we'll set the properties for our instance...
           Value: "Tutorial Database Server"
 ```
 
-First we choose the image we'd like for this instance, in the code above we've chosen [Amazon Linux 2][43]. There are other Linux images out there, I picked this one mostly because it already has the AWS tools and CloudFormation stuff installed, making things that much easier. Also kind of interesting, if you develop locally you can work with an [Amazon Linux 2 Docker Container][44] on your workstation.
+Way back in part 1 we create these parameters and provided default values for them, now they are finally coming into play. If you look back at the top of the template, you'll see that we set parameters for the image, instance type, key pair name and root volume. While our template requires that a key pair name be provided the other values are populated with default values. My expectation is that the default values will normally be used, most of the reason they are at the top in the parameter section is to make them easy to get at.
 
-Next we choose our instance type, I chose `t2.micro` because this is a tutorial and I don't want to cost you money, this type is eligible for use under [Amazon's free tier][45]. If you haven't used up your 750 hours of free tier usage for the month you shouldn't be charged for provisioning these instances. Setting cost aside, a micro instance is likely enough to host a low traffic website, like your personal blog.
+The first thing we do is choose the image we'd like for this instance, in the code above we have a reference to the parameter, the default value is for the [Amazon Linux 2][43] image. There are other Linux images out there, I picked this one mostly because it already has the AWS tools and CloudFormation stuff installed, making things that much easier. Also kind of interesting, if you develop locally you can work with an [Amazon Linux 2 Docker Container][44] on your workstation.
+
+Next we use our instance type parameter, the default values is for `t2.micro` because this is a tutorial and I don't want to cost you money; this type is eligible for use under [Amazon's free tier][45]. If you haven't used up your 750 hours of free tier usage for the month you shouldn't be charged for provisioning these instances. Setting cost aside, a micro instance is likely enough to host a low traffic website, like your personal blog.
 
 We set the name of the key pair we want to use to provision our instance, note that the value we reference in the `KeyName` property is the one parameter we set for this script back in part 1. You will need to have this key pair handy in order to SSH to the instance.
 
 We'd like the database server to be on our private subnet and we take care of that when we specify the `NetworkInterfaces` property. Here we pass in a reference to our private subnet, we then set the security group to our "private" security group with the `GroupSet` property of the network interface.
 
-Every instance needs disk space and we can customize the [Elastic Block Store][46] (EBS) volumes for our instance with the `BlockDeviceMappings` property. We map in one volume of 250GB to the device `/dev/xvda` on our instance, we chose the "general purpose" (gp2) volume type.
+Every instance needs disk space and we can customize the [Elastic Block Store][46] (EBS) volumes for our instance with the `BlockDeviceMappings` property. We map in one volume of 250GB (referencing our parameter) to the root device by using the substitution function with our parameter to set the value to  `/dev/xvda`, we chose the "general purpose" (gp2) volume type.
 
 The default volume type is "gp2" and it's a reasonable choice, more information about the various types may be found in the [EBS volume type documentation][47]. Also note that the root device that the instance boots from may vary from one Linux distribution to the other. For instance, under Ubuntu the root volume needs to be mapped to `/dev/sda1`; if the instance can't find the volume you will see it start up in the EC2 console but it will stop in just a couple of minutes.
 
@@ -218,8 +220,8 @@ And that's it... For our database server. We need to do pretty much the same thi
                 export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
                 export DATABASE_SERVER="${TutorialDatabaseServer.PrivateIp}"
     Properties:
-      ImageId: "ami-035be7bafff33b6b6"  # Amazon Linux 2
-      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       NetworkInterfaces:
         - SubnetId: !Ref TutorialPublicSubnet
@@ -227,9 +229,9 @@ And that's it... For our database server. We need to do pretty much the same thi
           GroupSet:
             - !Ref TutorialPublicSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"  # varies based on Linux type (Ubuntu /dev/sda1)
+        - DeviceName: !Sub "/dev/${RootDevice}"
           Ebs:
-            VolumeSize: 250
+            VolumeSize: !Ref VolumeSize
             VolumeType: gp2
       IamInstanceProfile: !Ref TutorialInstanceProfile
       Tags:
