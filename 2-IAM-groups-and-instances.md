@@ -3,6 +3,8 @@ layout: post
 title: Provision Pragmatically and Programmatically with CloudFormation, 2
 ---
 
+![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram-2.png "Diagram of our CloudFormation Tutorial Stack")
+
 This is the second part in a three part series where we build up a CloudFormation template for what I think of as a pretty typical environment: one virtual private cloud broken into two subnets and including two instances. If you haven't read the first part in the series, I encourage you to check it out now!
 
 ## Setup an "Admininstrators" Group
@@ -51,15 +53,9 @@ aws cloudformation create-stack \
 
 If you don't include the tag, CloudFormation will exit with an error. The same flag can be used with "update" commands.
 
-## Provision Our Instances
-
-I know what you are thinking: all that work and we're only now provisioning our instances! It's true, there was a lot of preparation and things to think about but we are well on our way to having a template that will provision our servers in a repeatable and reasonably safe manner. Just think of all the templates you will be writing!
-
-Oh, wait, I forgot about the roles and policies for the instances. Sorry!
-
 ### Setup a Role for Our Instances
 
-First we need to setup the role that our instances can assume to get access to resources (for now, just the backup bucket).
+Next we need to setup the role that our instances can assume to get access to resources (for now, just the backup bucket).
 
 ```yaml
   TutorialInstanceRole:
@@ -79,7 +75,7 @@ First we need to setup the role that our instances can assume to get access to r
 
 We use the [Role resource][36] to create our new instance role and we assign three canned policies...
 
-* the first lets the instance run the CloudWatch agent and submit events to the [CloudWatch service][37]
+* the first lets the instance run the [CloudWatch agent][52] and submit events to the [CloudWatch service][37]
 * the next lets the instance interact with [Systems Manager][38], letting us manage the instances as a group
 * The last provides read-only access to the Systems Manager parameter store.
 
@@ -123,7 +119,23 @@ The last piece of this puzzle is an "instance profile" that we can assign to our
 
 With all of the other work done, there's not much to see here. We create a new [InstanceProfile resource][40] and link it to our role. When we provision instances we can assign them this profile, they will then have the ability to write to our backup bucket, submit performance and event data to CloudWatch and accept remote commands from System Manager.
 
+### Provision CloudWatch Log Groups
+
+The very last thing we need before provisioning are a couple CloudWatch [log groups][50]. We can instruct our instances to ship some of their log files out to these groups and then view the logs through the CloudWatch console.
+
+```yaml
+  TutorialBootLog:
+    Type: AWS::Logs::LogGroup
+
+  TutorialKernelLog:
+    Type: AWS::Logs::LogGroup
+```
+
+We use the [LogGroup][51] resource to create two new log groups. These groups will be names after the name we provide in the template with some random characters tacked on at the end. We're creating the groups now because we're going to reference them directly when we provision the instances.
+
 ### Provision the Database Server
+
+I know what you are thinking: all that work and we're only now provisioning our instances! It's true, there was a lot of preparation and things to think about but we are well on our way to having a template that will provision our servers in a repeatable and reasonably safe manner. Just think of all the templates you will be writing!
 
 We're going to provision the database server first. This one is a little bit involved so I'm going to break it up into pieces. First we provision a new instance with the [Instance resource][41]...
 
@@ -152,6 +164,89 @@ our backup bucket will be available through the `BACKUP_S3_BUCKET` environment
 variable. Keep in mind that this metadata doesn't do anything on it's own: the
 initialization script will use it when it runs and we'll do that at the end of
 our instance definition.
+
+We also need to provide the configuration file for the CloudWatch agent. This agent will collect performance data and log files and ship them back to the CloudWatch service.
+
+```yaml
+            /etc/amazon/amazon-cloudwatch-agent.json:
+              content: !Sub |
+                {
+                  "metrics": {
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "cpu": {
+                        "measurement": [
+                          "cpu_usage_idle",
+                          "cpu_usage_iowait",
+                          "cpu_usage_user",
+                          "cpu_usage_system"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "totalcpu": false
+                      },
+                      "disk": {
+                        "measurement": [
+                          "used_percent",
+                          "inodes_free"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "diskio": {
+                        "measurement": [
+                          "io_time"
+                        ],
+                        "metrics_collection_interval": 30,
+                        "resources": [
+                          "*"
+                        ]
+                      },
+                      "mem": {
+                        "measurement": [
+                          "mem_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      },
+                      "statsd": {
+                        "metrics_aggregation_interval": 30,
+                        "metrics_collection_interval": 10,
+                        "service_address": ":8125"
+                      },
+                      "swap": {
+                        "measurement": [
+                          "swap_used_percent"
+                        ],
+                        "metrics_collection_interval": 30
+                      }
+                    }
+                  },
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                            "log_group_name": "${TutorialBootLog}",
+                            "file_path": "/var/log/boot.log"
+                          },
+                          {
+                            "log_group_name": "${TutorialKernelLog}",
+                            "file_path": "/var/log/messages"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+```
+
+This configuration file tells the CloudWatch agent to ship back data on CPU, disk, memory and swap file usage back to CloudWatch as well as two log files: the boot and kernel logs.
 
 Next we'll set the properties for our instance...
 
@@ -201,10 +296,21 @@ With that out of the way the only thing left to do is to invoke the CloudFormati
         Fn::Base64: 
           !Sub |
             #!/bin/bash -xe
+
+            # cloudformation initialize
             /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialDatabaseServer
+
+            # download and install cloudwatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            yum -y install amazon-cloudwatch-agent.rpm
+            mv /etc/amazon/amazon-cloudwatch-agent.json /etc/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.json
+            sudo systemctl enable amazon-cloudwatch-agent
+            sudo systemctl start amazon-cloudwatch-agent
 ```
 
 Documentation for `cfn-init` is [available on the CloudFormation site][48]. You can see in the example above that we call the script with the name of our stack, the stack's deployment region and the name of our server. When the script runs it will inspect the `Metadata` property that we set at the the beginning of our instance stanza and will carry out those tasks. For this instance, the initialization script will add that new file to `/etc/profile.d` with our custom environment variables.
+
+The `cfn-init` script handles getting our configuration files written to disk, the other thing we need to do is get the CloudWatch agent installed and running. The next bit of script downloads the current version, installs it, moves our configuration file into place and then enables and starts the service so that the agent is started at boot time.
 
 And that's it... For our database server. We need to do pretty much the same thing for our web server.
 
@@ -219,6 +325,13 @@ And that's it... For our database server. We need to do pretty much the same thi
               content: !Sub |
                 export BACKUP_S3_BUCKET="${TutorialBackupS3Bucket}"
                 export DATABASE_SERVER="${TutorialDatabaseServer.PrivateIp}"
+```
+
+Mostly everything is exactly the same but there are a couple small differences. When we setup the `Metadata` for the initialization script we added another environment variable that contains the private IP address of the database server, in this way we can deploy this template more than once and the web server in each stack will know where to find it's matching database server.
+
+I don't include it in this article, but we provide the exact same configuration file for the CloudWatch agent that we used for the web server. If you are writing the template along with this article, take a minute to copy and paste that stanza into the file now.
+
+```
     Properties:
       ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
@@ -241,10 +354,19 @@ And that's it... For our database server. We need to do pretty much the same thi
         Fn::Base64: 
           !Sub |
             #!/bin/bash -xe
-            /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialWebServer
+
+            # cloudformation initialize
+            /opt/aws/bin/cfn-init -v -s ${AWS::StackName} --region ${AWS::Region} -r TutorialDatabaseServer
+
+            # download and install cloudwatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            yum -y install amazon-cloudwatch-agent.rpm
+            mv /etc/amazon/amazon-cloudwatch-agent.json /etc/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.json
+            sudo systemctl enable amazon-cloudwatch-agent
+            sudo systemctl start amazon-cloudwatch-agent
 ```
 
-Mostly everything is exactly the same but there are a couple small differences. When we setup the `Metadata` for the initialization script we added another environment variable that contains the private IP address of the database server, in this way we can deploy this template more than once and the web server in each stack will know where to find it's matching database server. We've also places the web server in the public subnet so that it can communicate with the public internet (as web servers so often need to do).
+In terms of the properties, the only difference is that we have placed our web server in the public subnet so that it can communicate with the public internet (as web servers so often need to do).
 
 At this point we have covered the first four goals that we laid out for ourselves in part 1. With the template as it stands right now, we can...
 
@@ -271,6 +393,77 @@ On the right-hand side is a list of filters and this is where the tags will come
 
 What you are looking at now is likely a very dull report, because we've been using low-cost free-tier instances. But, still, what we have is a report on just the resources that belong to this project. If you were to place a "Client" tag in your templates you could report on the entire cost of a client (maybe you could use that to figure out how to bill) and you can break down a client's costs by particular projects. It is a valuable tool and definitely worth putting some time in exploring your options.
 
+## Set Alarms on Instance Usage
+
+I think of this as related to our reporting goals: we'd like to set some alarms that monitor the data we're sending to CloudWatch to let us know if our servers start to go off the rails. We'll set alarms for when CPU usage gets high or if we start to run out of disk space but I bet you can think of lots of other things you'd like to monitor.
+
+We're going to use the [Simple Notification Service][53] to alert us when an alarm is hit. The way this will work is that when CloudWatch sees an alarm trigger, it will send a message to the SNS "topic". It will be our responsibility to log into the SNS console and add ourselves to the notification list (by email or text message), we aren't going to populate the list of subscribers.
+
+```yaml
+  TutorialAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TutorialAlarms
+```
+
+We use the [Topic][54] resource to create our new alarm target topic. With the SNS topic created we can now create our first alarm.
+
+```yaml
+  TutorialDatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database Server CPU Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialDatabaseServer
+```
+
+With the [Alarm][55] resource we create an alarm for CPU usage on the database server, if the server is using more than 89% of the CPU for more than 3 minutes then the alarm will trigger and send a message to our SNS topic.
+
+```yaml
+  TutorialDatabaseDiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database Server Disk Usage High
+      AlarmActions:
+        - !Ref TutorialAlarmTopic
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 89
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TutorialDatabaseServer
+        - Name: ImageId
+          Value: !Ref ImageId
+        - Name: InstanceType
+          Value: !Ref InstanceType
+        - Name: path
+          Value: /
+        - Name: device
+          Value: !Sub ${RootDevice}1
+        - Name: fstype
+          Value: !Ref RootFsType
+```
+
+This next alarm is for the amount of disk used by the database server, here we set an alarm to trigger if more than 89% of the disk is in use. This one will also wait for the disk to be in this state for 3 minutes before triggering the alarm.
+
+Provisioning this alarm is a bit more work, you can see that we had to add several `Dimensions` to get the alarm setup. This is because when the CloudWatch agent reports this data it references all of these dimensions and we need to match them all in order to have a working alarm. If we had left one of these out then the alarm wouldn't match any data and would never trigger.
+
+The only bit left is the backup jobs but we'll leave that for part 3. `;-)` Congratulations on working your way through all of this material! While it can be pretty dry reading you can really get a lot of mileage building templates for projects that you know you will be deploying over and over.
+
 ------
 [35]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-group.html
 [36]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
@@ -287,4 +480,10 @@ What you are looking at now is likely a very dull report, because we've been usi
 [47]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumeTypes.html
 [48]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
 [49]: https://console.aws.amazon.com/billing/home
+[50]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html
+[51]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-logs-loggroup.html
+[52]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html
+[53]: https://aws.amazon.com/sns/
+[54]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sns-topic.html
+[55]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-cw-alarm.html
 
