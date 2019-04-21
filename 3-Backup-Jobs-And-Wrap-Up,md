@@ -1,0 +1,385 @@
+---
+layout: post
+title: Provision Pragmatically and Programmatically with CloudFormation, 3
+---
+
+![CloudFormation Diagram](https://raw.githubusercontent.com/cmiles74/cloudformation-tutorial/master/template-diagram-3.png "Diagram of our CloudFormation Tutorial Stack")
+
+This is the third and final part in a three part series where we build up a CloudFormation tempate for what I like to think of as a pretty typical environment: one virtual private cloud broken into two subnets and including two instances. So far we have covered...
+
+* Part 1: we setup of the VPC and subnets
+* Part 2: we setup some buckets, groups and privileges, and our instances
+
+In this final part we put our backup jobs in place and wrap-up the template. We have covered a lot of CloudFormation syntax and have realy exercised the tool, after this last part in the series we'll have everything you need to support your next project. If you want to browse through the complete template, [it is available on GitHub][35].
+
+## Setting Up Lambda for Snapshotting (and Retention)
+
+What, when and how to backup your instances and data is a complicated subject and covers a lot of ground. For this project we're only going to deal with the bare minimum: performing nightly snapshots of your images and retaining those snapshots according to a schedule. This will get a reliable image of your server's storage at backup time but it may not guarantee that your database files are in a consistent state. We don't walk through the process here, but my advice is to setup a job on your database server that writes a backup of the database to disk *before* the snapshot job runs. If you ever restore a snapshot you will have a consistent backup of the database right there along with it.
+
+We will use the [Amazon Lambda][2] service to perform the snapshot and cull old snapshot images. Since the Lambda script runs independently of our instances we can be sure it will always run on-time and we can monitor the success or failure of the backup job on it's own: we don't need to provide administrative access to our instances in order to perform or monitor the backup process. It's also really nice that we can get the backup job writtent and start it running all from within our CloudFormation script.
+
+### Daily Snapshot Job
+
+The first thing we need to do is to setup a new role for our backup job, this role will have the ability to manage snapshots and write logs to CloudFormation (so we can monitor those backup jobs).
+
+```yaml
+  TutorialLambdaBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: TutorialLambdaBackupRolePolicy
+          PolicyDocument:
+           Statement:
+             - Effect: Allow
+               Action:
+                 - ec2:CreateTags
+                 - ec2:CreateSnapshot
+                 - ec2:DeleteSnapshot
+                 - ec2:Describe*
+                 - ec2:ModifySnapshotAttribute
+                 - ec2:ResetSnapshotAttribute
+                 - xray:PutTraceSegments
+                 - xray:PutTelemetryRecords
+                 - xray:GetSamplingRules
+                 - xray:GetSamplingTargets
+                 - xray:GetSamplingStatisticSummaries
+                 - logs:*
+               Resource: "*"
+```
+
+We've seen all of this stuff before: we create a new role and we associate the AWS service (in this case Lambda) and the `AssumeRole` action, letting whoever we assign the role the ability to "assume" it. We then create a new policy for the role that allows whoever assumes this role access to manage snapshots for our account as well as the ability to write to the CloudFormation logs and the [Amazon X-Ray (tracing) service][9].
+
+Next we create our Lambda process, I'm going to leave out the code for now and we'll go over that next. There are better ways to get your backup script into your Lambda but they all involve adding a lot of complexity to this article. When you have the time and energy you can look into this on your own (or maybe I'll write another article). In any case, having the script inline works for now.
+
+```yaml
+  TutorialCreateBackupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ebs-snapshots-create
+      Description: Create EBS Snapshots
+      Handler: index.handler
+      Role: !GetAtt TutorialLambdaBackupRole.Arn
+      Environment:
+        Variables:
+          REGIONS: !Ref AWS::Region
+      Runtime: python3.6
+      Timeout: 90
+      TracingConfig:
+        Mode: Active
+      Code:
+        ZipFile: |
+        ...
+        code ellided for clarity
+        ...
+```
+
+We use the `AWS::Lambda::Function` resource to provision our new Lambda function ad we assign it a name, description and tell it how to invoke itself. We're going to write the backup job in [Python][4] because it keeps the code simple and nearly everyone knows Python. `;-` Here's that Python scropt...
+
+```python
+import os
+from datetime import datetime, timedelta
+import boto3
+
+def handler(event, context):
+
+  ec2_client = boto3.client("ec2")
+  env_regions = os.getenv("REGIONS", None)
+  clientTag = os.getenv("CLIENT_BACKUP_TAG")
+  projectTag = os.getenv("PROJECT_BACKUP_TAG")
+  today = datetime.today()
+  total_created = 0
+
+  if env_regions:
+    regions = ec2_client.describe_regions(RegionNames = env_regions.split(","))
+  else:
+    return total_created
+
+  # loop through all of our regions
+  for region in regions.get("Regions", []):
+    regionName = region["RegionName"]
+    print("Checking for volumes in region %s" % (regionName))
+    ec2_client = boto3.client("ec2", region_name = region["RegionName"])
+
+    # query for volumes with matching tags that are in use
+    result = ec2_client.describe_volumes(Filters = [
+      {"Name": "status", "Values": ["in-use"]}
+    ])
+
+    if not result:
+      print("No matching EBS volumes with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+      return total_created
+
+    for volume in result["Volumes"]:
+      volume_name = volume["VolumeId"]
+      volume_description = "Created by ebs-snapshots-create"
+
+      # check the volume for matching tags
+      if "Tags" in volume:
+        for tag in volume["Tags"]:
+          if tag["Key"] == "Name":
+            volume_name = tag["Value"]
+          elif tag["Key"] == "Description":
+            volume_description = tag["Value"]
+
+      # daily
+      print("Creating snapshot for EBS volume %s" % (volume["VolumeId"]))
+      result = ec2_client.create_snapshot(
+        VolumeId = volume["VolumeId"],
+        Description = volume_description
+      )
+      ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+      snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+      snapshot_resource.create_tags(Tags = [
+        {"Key": "Name", "Value": volume_name},
+        {"Key": "Description", "Value": volume_description},
+        {"Key": "Interval", "Value": "Daily"}
+      ])
+      total_created += 1
+
+      # quarterly
+      if today.day == 1 and today.month % 4 == 0:
+        print("Creating quarterly snapshot for EBS volume %s" % (volume["VolumeId"]))
+        result = ec2_client.create_snapshot(
+        VolumeId = volume["VolumeId"],
+        Description = volume_description
+        )
+        ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+        snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+        snapshot_resource.create_tags(Tags = [
+          {"Key": "Name", "Value": volume_name},
+          {"Key": "Description", "Value": volume_description},
+          {"Key": "Interval", "Value": "Quarterly"}
+        ])
+        total_created += 1
+
+      # annual
+      if today.day == 31 and today.month == 12:
+        print("Creating annual snapshot for EBS volume %s" % (volume["VolumeId"]))
+        result = ec2_client.create_snapshot(
+        VolumeId = volume["VolumeId"],
+        Description = volume_description
+        )
+        ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+        snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+        snapshot_resource.create_tags(Tags = [
+          {"Key": "Name", "Value": volume_name},
+          {"Key": "Description", "Value": volume_description},
+          {"Key": "Interval", "Value": "Annual"},
+        ])
+        total_created += 1
+
+  return total_created
+```
+
+You only have so many characters available for an inline Lambda script so I've kept the comments to a minimum. The script is straightforward and the code (for the sake of clarity) doesn't do anything tricky; it should be easy to follow. Basically what it does is check all of the regions we provided in the `REGIONS` environment variable and then it checks that region for instances. When it finds one it gets a handle on all of it's volumes and then snapshots each one.
+
+* First the daily snapshot is created, the script always takes this snapshot
+* If this is the first day of the first month of the quarter then a quarterly snapshot is taken as well
+* If it's the last day of the year then we take the annual snapshot
+
+For each snapshot created our script sets the snapshot name to match the volume name and the description of "Created by ebs-snapshot-create" (the name of our Lambda function). It also sets the "Client" and "Project" tags on each snapshot to match the environment variable values.
+
+The script keeps track of how many snapshot it's created and returns that number when the function ends. Along the way we also `print` data to standard out: the standard out and the return value will all be gathered and logged when the script runs. 
+
+### Daily Snapshot Retention Job
+
+We don't want to accrue snapshots indefininitely, let's not forget that we get charged for their storage. `;-)` This next job will enforce our retention policy.
+
+```yaml
+  TutorialDeleteBackupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ebs-snapshots-delete
+      Description: Delete Old EBS Snapshots
+      Handler: index.handler
+      Role: !GetAtt TutorialLambdaBackupRole.Arn
+      Environment:
+        Variables:
+          REGIONS: !Ref AWS::Region
+      Runtime: python3.6
+      Timeout: 90
+      TracingConfig:
+        Mode: Active
+      Code:
+        ZipFile: |
+        ...
+        code elided for clarity
+        ...
+```
+
+It's almost exactly like the last job, aside from it's name and description. The real difference is in the script for the Lambda function. The script calculates the cutoff date for our daily snapshots: seven days old. As the script checks through the snapshots for the volumes it will check the tags that we placed on the snapshots in the backup job, specificaly the "Interval" tag. Daily snapshots older than our cutoff date will be removed leaving only the seven momst recent daily snapshots.
+
+We do the same for the quartlerly snapshots; we calculate the cutoff data and then check through all of the snapshots tagged with an "Interval" value of "Quarterly". All of the snapshots past the cutoff are deleted leaving us with the four most recent quartlery snapshots.
+
+The annual snapshots we leave as is, we will accrue those at the rate of once a year forever. You never know when someone will want to dig up old, historic data.
+
+```python
+import os
+from datetime import datetime, timedelta
+from dateutil import relativedelta
+import boto3
+
+def handler(event, context):
+
+  ec2_client = boto3.client("ec2")
+  date_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+  daily_cutoff = (datetime.utcnow() - timedelta(days = 7)).strftime(date_format)
+  env_regions = os.getenv("REGIONS", None)
+  today = datetime.today()
+  total_deleted = 0
+
+  if env_regions:
+    regions = ec2_client.describe_regions(RegionNames = env_regions.split(","))
+  else:
+    return total_created
+
+  for region in regions.get("Regions", []):
+    regionName = region["RegionName"]
+    print("Checking for snapshots in region %s" % (regionName))
+
+    # query for Daily snapshots with matching tags
+    result = ec2_client.describe_snapshots(Filters = [
+      {"Name": "tag:Interval", "Values": ["Daily"]}
+    ])
+
+    if not result:
+      print("No matching Daily snapshots with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+      return total_deleted
+
+    for snapshot in result["Snapshots"]:
+      snapshot_time = snapshot["StartTime"].strftime(date_format)
+      snapshot_id = snapshot["SnapshotId"]
+
+      if daily_cutoff > snapshot_time:
+        snapshot_name = ""
+        if "Tags" in snapshot:
+          for tag in snapshot["Tags"]:
+              if tag["Key"] == "Name":
+                  snapshot_name = tag["Value"]
+
+        print("Deleting Daily EBS snapshot ID = %s, Name = %s" % (snapshot_id, snapshot_name))
+        ec2_client.delete_snapshot(SnapshotId = snapshot_id)
+        total_deleted += 1
+
+    # query for quarterly snapshots with matching tags
+    if today.day == 1 and today.month % 4 == 1:
+      quarterly_cutoff_raw = datetime.utcnow() - relativedelta.relativedelta(months = 15) # keep five quarters
+      quarterly_cutoff = quarterly_cutoff_raw.strftime(date_format)
+      result = ec2_client.describe_snapshots(Filters = [
+        {"Name": "tag:Interval", "Values": ["Quarterly"]}
+      ])
+
+      if not result:
+        print("No matching Quarterly snapshots with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+        return total_deleted
+
+      for snapshot in result["Snapshots"]:
+        snapshot_time = snapshot["StartTime"].strftime(date_format)
+        snapshot_id = snapshot["SnapshotId"]
+
+        if quarterly_cutoff > snapshot_time:
+          snapshot_name = ""
+          if "Tags" in snapshot:
+            for tag in snapshot["Tags"]:
+                if tag["Key"] == "Name":
+                    snapshot_name = tag["Value"]
+
+          print("Deleting Quarterly EBS snapshot ID = %s, Name = %s" % (snapshot_id, snapshot_name))
+          ec2_client.delete_snapshot(SnapshotId = snapshot_id)
+          total_deleted += 1
+
+  return total_deleted
+```
+
+With these two functions added to our CloudFormation template we are nearly ready to go. All we need to do is call these jobs every night.
+
+### Rules to Invoke our Jobs
+
+We want to run our jobs every night, first the backup job and then the retention job that culls out old snapshots. Lucky for us CloudWatch will let you create a ["rule" that is triggered on a schedule][5], we can create our own rule that will start our backup jobs. The [`AWS::Events::Rule`][6] resource can be used to do exactly this.
+
+```yaml
+  TutorialPerformBackupRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers our backup lambda script
+      ScheduleExpression: cron(30 4 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt TutorialCreateBackupLambda.Arn
+          Id: TutorialBackupRule
+
+  TutorialDeleteBackupRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers our backup delete lambda script
+      ScheduleExpression: cron(45 4 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt TutorialDeleteBackupLambda.Arn
+          Id: TutorialBackupRule
+```
+
+These two jobs use the familiar [cron style syntax][7], we backup at 4:00AM and then delete old snapshots at 4:45AM every day. Each rule has a pointer to the `ARN` of the Lambda function it will invokce.
+
+With our jobs all setup, we need to provide our rules with permissions to invoke our Lambda functions with the [`AWS::Lambda::Permission`][8] resource.
+
+```yaml
+  TutorialPermissionCreate:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TutorialCreateBackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TutorialPerformBackupRule.Arn
+
+  TutorialPermissionDelete:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TutorialDeleteBackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TutorialDeleteBackupRule.Arn
+```
+
+We add the `InvokeFunction` permission to our two CloudFront triggers so that they are allowed to invoke our Lambda functions. With that our backups are all taken care of.
+
+## Template Wrap-Up: Output
+
+The last bit of any CloudFront template is provided output data, this data will be provided as a JSON object. You could provide thiss data to another process that double-checks that the resources have been created or performs additional tasks. Here's our output section...
+
+```yaml
+Outputs:
+  WebServer:
+    Description: A reference to the web server
+    Value: !Ref TutorialWebServer
+
+  DatabaseServer:
+    Description: A reference to the database server
+    Value: !Ref TutorialDatabaseServer
+
+  BackupS3Bucket:
+    Description: S3 Bucket used to backup data
+    Value: !Sub |
+      https://${TutorialBackupS3Bucket.DomainName}\
+```
+
+Here we return references to our two server instances and our S3 bucket. There are certainly more items we could list in this section, perhaps our reference to our VPC. For now we'll leave it short and to the point
+
+----
+
+[1]: https://github.com/cmiles74/cloudformation-tutorial
+[2]: https://aws.amazon.com/lambda/
+[3]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-function.html
+[4]: https://www.python.org/
+[5]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/Create-CloudWatch-Events-Scheduled-Rule.html
+[6]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-events-rule-target.html
+[7]: https://crontab.guru/
+[8]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-permission.html
+[9]: https://aws.amazon.com/xray/
