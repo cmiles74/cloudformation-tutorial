@@ -745,8 +745,7 @@ Resources:
 
               # query for volumes with matching tags that are in use
               result = ec2_client.describe_volumes(Filters = [
-                {"Name": "status", "Values": ["in-use"]},
-                {"Name": "tag:Backup", "Values": ["true"]}
+                {"Name": "status", "Values": ["in-use"]}
               ])
 
               if not result:
