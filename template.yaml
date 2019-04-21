@@ -666,3 +666,301 @@ Resources:
           Value: !Sub ${RootDevice}1
         - Name: fstype
           Value: !Ref RootFsType
+
+  #
+  # Backups
+  #
+  TutorialLambdaBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: NFormLambdasBackupRolePolicy
+          PolicyDocument:
+           Statement:
+             - Effect: Allow
+               Action:
+                 - ec2:CreateTags
+                 - ec2:CreateSnapshot
+                 - ec2:DeleteSnapshot
+                 - ec2:Describe*                 
+                 - ec2:ModifySnapshotAttribute
+                 - ec2:ResetSnapshotAttribute
+                 - xray:PutTraceSegments
+                 - xray:PutTelemetryRecords
+                 - xray:GetSamplingRules
+                 - xray:GetSamplingTargets
+                 - xray:GetSamplingStatisticSummaries
+                 - logs:*
+               Resource: "*"
+
+  #
+  # Backup Lambda with code for the job
+  #
+  TutorialCreateBackupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ebs-snapshots-create
+      Description: Create EBS Snapshots
+      Handler: index.handler
+      Role: !GetAtt TutorialLambdaBackupRole.Arn
+      Environment:
+        Variables:
+          REGIONS: !Ref AWS::Region
+      Runtime: python3.6
+      Timeout: 90
+      TracingConfig:
+        Mode: Active
+      Code:
+        ZipFile: |
+          import os
+          from datetime import datetime, timedelta
+          import boto3
+
+          def handler(event, context):
+
+            ec2_client = boto3.client("ec2")
+            env_regions = os.getenv("REGIONS", None)
+            clientTag = os.getenv("CLIENT_BACKUP_TAG")
+            projectTag = os.getenv("PROJECT_BACKUP_TAG")
+            today = datetime.today()
+            total_created = 0
+
+            if env_regions:
+              regions = ec2_client.describe_regions(RegionNames = env_regions.split(","))
+            else:
+              return total_created
+
+            # loop through all of our regions
+            for region in regions.get("Regions", []):
+              regionName = region["RegionName"]
+              print("Checking for volumes in region %s" % (regionName))
+              ec2_client = boto3.client("ec2", region_name = region["RegionName"])
+
+              # query for volumes with matching tags that are in use
+              result = ec2_client.describe_volumes(Filters = [
+                {"Name": "status", "Values": ["in-use"]},
+                {"Name": "tag:Backup", "Values": ["true"]}
+              ])
+
+              if not result:
+                print("No matching EBS volumes with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+                return total_created
+
+              for volume in result["Volumes"]:
+                volume_name = volume["VolumeId"]
+                volume_description = "Created by ebs-snapshots-create"
+
+                # check the volume for matching tags
+                if "Tags" in volume:
+                  for tag in volume["Tags"]:
+                    if tag["Key"] == "Name":
+                      volume_name = tag["Value"]
+                    elif tag["Key"] == "Description":
+                      volume_description = tag["Value"]
+
+                # daily
+                print("Creating snapshot for EBS volume %s" % (volume["VolumeId"]))
+                result = ec2_client.create_snapshot(
+                  VolumeId = volume["VolumeId"],
+                  Description = volume_description
+                )
+                ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+                snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+                snapshot_resource.create_tags(Tags = [
+                  {"Key": "Name", "Value": volume_name},
+                  {"Key": "Description", "Value": volume_description},
+                  {"Key": "Interval", "Value": "Daily"}
+                ])
+                total_created += 1
+
+                # quarterly
+                if today.day == 1 and today.month % 4 == 0:
+                  print("Creating quarterly snapshot for EBS volume %s" % (volume["VolumeId"]))
+                  result = ec2_client.create_snapshot(
+                  VolumeId = volume["VolumeId"],
+                  Description = volume_description
+                  )
+                  ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+                  snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+                  snapshot_resource.create_tags(Tags = [
+                    {"Key": "Name", "Value": volume_name},
+                    {"Key": "Description", "Value": volume_description},
+                    {"Key": "Interval", "Value": "Quarterly"}
+                  ])
+                  total_created += 1
+
+                # annual
+                if today.day == 31 and today.month == 12:
+                  print("Creating annual snapshot for EBS volume %s" % (volume["VolumeId"]))
+                  result = ec2_client.create_snapshot(
+                  VolumeId = volume["VolumeId"],
+                  Description = volume_description
+                  )
+                  ec2_resource = boto3.resource("ec2", region_name = region["RegionName"])
+                  snapshot_resource = ec2_resource.Snapshot(result["SnapshotId"])
+                  snapshot_resource.create_tags(Tags = [
+                    {"Key": "Name", "Value": volume_name},
+                    {"Key": "Description", "Value": volume_description},
+                    {"Key": "Interval", "Value": "Annual"},
+                  ])
+                  total_created += 1
+
+            return total_created
+
+  #
+  # Delete old backups, enforce retention policy
+  TutorialDeleteBackupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ebs-snapshots-delete
+      Description: Delete Old EBS Snapshots
+      Handler: index.handler
+      Role: !GetAtt TutorialLambdaBackupRole.Arn
+      Environment:
+        Variables:
+          REGIONS: !Ref AWS::Region
+      Runtime: python3.6
+      Timeout: 90
+      TracingConfig:
+        Mode: Active
+      Code:
+        ZipFile: |
+          import os
+          from datetime import datetime, timedelta
+          from dateutil import relativedelta
+          import boto3
+
+          def handler(event, context):
+
+            ec2_client = boto3.client("ec2")
+            date_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+            daily_cutoff = (datetime.utcnow() - timedelta(days = 7)).strftime(date_format)
+            env_regions = os.getenv("REGIONS", None)
+            today = datetime.today()
+            total_deleted = 0
+
+            if env_regions:
+              regions = ec2_client.describe_regions(RegionNames = env_regions.split(","))
+            else:
+              return total_created
+
+            for region in regions.get("Regions", []):
+              regionName = region["RegionName"]
+              print("Checking for snapshots in region %s" % (regionName))
+
+              # query for Daily snapshots with matching tags
+              result = ec2_client.describe_snapshots(Filters = [
+                {"Name": "tag:Interval", "Values": ["Daily"]}
+              ])
+
+              if not result:
+                print("No matching Daily snapshots with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+                return total_deleted
+
+              for snapshot in result["Snapshots"]:
+                snapshot_time = snapshot["StartTime"].strftime(date_format)
+                snapshot_id = snapshot["SnapshotId"]
+
+                if daily_cutoff > snapshot_time:
+                  snapshot_name = ""
+                  if "Tags" in snapshot:
+                    for tag in snapshot["Tags"]:
+                        if tag["Key"] == "Name":
+                            snapshot_name = tag["Value"]
+
+                  print("Deleting Daily EBS snapshot ID = %s, Name = %s" % (snapshot_id, snapshot_name))
+                  ec2_client.delete_snapshot(SnapshotId = snapshot_id)
+                  total_deleted += 1
+
+              # query for quarterly snapshots with matching tags
+              if today.day == 1 and today.month % 4 == 1:
+                quarterly_cutoff_raw = datetime.utcnow() - relativedelta.relativedelta(months = 15) # keep five quarters
+                quarterly_cutoff = quarterly_cutoff_raw.strftime(date_format)
+                result = ec2_client.describe_snapshots(Filters = [
+                  {"Name": "tag:Interval", "Values": ["Quarterly"]}
+                ])
+
+                if not result:
+                  print("No matching Quarterly snapshots with tag 'Client' = '%s' and tag 'Project' = '%s' in region %s" % (clientTag, projectTag, regionName))
+                  return total_deleted
+
+                for snapshot in result["Snapshots"]:
+                  snapshot_time = snapshot["StartTime"].strftime(date_format)
+                  snapshot_id = snapshot["SnapshotId"]
+
+                  if quarterly_cutoff > snapshot_time:
+                    snapshot_name = ""
+                    if "Tags" in snapshot:
+                      for tag in snapshot["Tags"]:
+                          if tag["Key"] == "Name":
+                              snapshot_name = tag["Value"]
+
+                    print("Deleting Quarterly EBS snapshot ID = %s, Name = %s" % (snapshot_id, snapshot_name))
+                    ec2_client.delete_snapshot(SnapshotId = snapshot_id)
+                    total_deleted += 1
+
+            return total_deleted
+
+  #
+  # Rules to trigger our backup and retention jobs
+  #
+  TutorialPerformBackupRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers our backup lambda script
+      ScheduleExpression: cron(30 4 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt TutorialCreateBackupLambda.Arn
+          Id: TutorialBackupRule
+
+  TutorialDeleteBackupRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers our backup delete lambda script
+      ScheduleExpression: cron(45 4 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt TutorialDeleteBackupLambda.Arn
+          Id: TutorialBackupRule
+
+  #
+  # Set permissions for our backup and retention jobs
+  #
+  TutorialPermissionCreate:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TutorialCreateBackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TutorialPerformBackupRule.Arn
+
+  TutorialPermissionDelete:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TutorialDeleteBackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TutorialDeleteBackupRule.Arn
+
+Outputs:
+  WebServer:
+    Description: A reference to the web server
+    Value: !Ref TutorialWebServer
+
+  DatabaseServer:
+    Description: A reference to the database server
+    Value: !Ref TutorialDatabaseServer
+
+  BackupS3Bucket:
+    Description: S3 Bucket used to backup data
+    Value: !Sub |
+      https://${TutorialBackupS3Bucket.DomainName}
+
