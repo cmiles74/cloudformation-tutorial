@@ -91,8 +91,6 @@ def handler(event, context):
 
   ec2_client = boto3.client("ec2")
   env_regions = os.getenv("REGIONS", None)
-  clientTag = os.getenv("CLIENT_BACKUP_TAG")
-  projectTag = os.getenv("PROJECT_BACKUP_TAG")
   today = datetime.today()
   total_created = 0
 
